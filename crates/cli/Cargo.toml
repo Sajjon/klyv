@@ -1,0 +1,16 @@
+[package]
+name = "klyv"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Internal dependencies
+klyv-core.workspace = true
+
+# External dependencies
+bon.workspace = true
+chrono = "0.4.41"
+clap = { version = "4.5.39", features = ["derive"] }
+colored = "3.0.0"
+fern = "0.7.1"
+log.workspace = true

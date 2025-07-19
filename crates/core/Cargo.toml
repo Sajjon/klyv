@@ -1,0 +1,19 @@
+[package]
+name = "klyv-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bon.workspace = true
+derive_more.workspace = true
+dirs-next.workspace = true
+getset.workspace = true
+indexmap.workspace = true
+insta.workspace = true
+log.workspace = true
+pretty_assertions.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+test-log.workspace = true
