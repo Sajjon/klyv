@@ -1,10 +1,11 @@
+mod fixtures;
 mod init_logging;
-use std::path::PathBuf;
-
-use init_logging::init_logging;
+mod test;
 
 use clap::Parser;
+use init_logging::init_logging;
 use klyv_core::prelude::*;
+use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(name = BINARY_NAME, about = "Splitting files with multiple types into separate files")]
@@ -27,15 +28,25 @@ impl TryFrom<CliArgs> for Input {
     }
 }
 
-fn run(input: Input) -> Result<()> {
-    debug!("Splitting files at {}", input.path().display());
-    Ok(())
+pub trait ResultExt<T, E>: Sized {
+    fn map_to_void(self) -> Result<(), E>;
+}
+
+impl<T, E> ResultExt<T, E> for Result<T, E> {
+    fn map_to_void(self) -> Result<(), E> {
+        self.map(|_| ())
+    }
+}
+
+pub fn run(input: Input) -> Result<Tree> {
+    info!("Splitting files at {}", input.path().display());
+    find_in().path(input.path()).call()
 }
 
 fn run_cli() -> Result<()> {
     let args = CliArgs::parse();
     let input = Input::try_from(args)?;
-    run(input)
+    run(input).map_to_void()
 }
 
 fn main() {

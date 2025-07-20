@@ -518,6 +518,8 @@ dependencies = [
  "fern",
  "klyv-core",
  "log",
+ "tempfile",
+ "test-log",
 ]
 
 [[package]]
@@ -532,6 +534,8 @@ dependencies = [
  "insta",
  "log",
  "pretty_assertions",
+ "proc-macro2",
+ "syn",
  "tempfile",
  "test-log",
  "thiserror 2.0.12",
