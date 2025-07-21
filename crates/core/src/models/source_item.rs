@@ -22,6 +22,39 @@ pub enum SourceItem {
     Verbatim(TokenStream),
 }
 
+impl TryFrom<syn::Item> for SourceItem {
+    type Error = Error;
+    fn try_from(value: syn::Item) -> Result<Self> {
+        match value {
+            syn::Item::Const(item_const) => Ok(SourceItem::unsplittable(item_const)),
+            syn::Item::Enum(item_enum) => Ok(SourceItem::r#enum(item_enum)),
+            syn::Item::ExternCrate(item_extern_crate) => {
+                Ok(SourceItem::unsplittable(item_extern_crate))
+            }
+            syn::Item::Fn(item_fn) => Ok(SourceItem::function(item_fn)),
+            syn::Item::ForeignMod(item_foreign_mod) => {
+                Ok(SourceItem::unsplittable(item_foreign_mod))
+            }
+            syn::Item::Impl(item_impl) => Ok(SourceItem::r#impl(item_impl)),
+            syn::Item::Macro(item_macro) => Ok(SourceItem::r#macro(item_macro)),
+            syn::Item::Mod(item_mod) => Ok(SourceItem::unsplittable(item_mod)),
+            syn::Item::Static(item_static) => Ok(SourceItem::unsplittable(item_static)),
+            syn::Item::Struct(item_struct) => Ok(SourceItem::r#struct(item_struct)),
+            syn::Item::Trait(item_trait) => Ok(SourceItem::r#trait(item_trait)),
+            syn::Item::TraitAlias(item_trait_alias) => {
+                Ok(SourceItem::unsplittable(item_trait_alias))
+            }
+            syn::Item::Type(item_type) => Ok(SourceItem::r#type(item_type)),
+            syn::Item::Union(item_union) => Ok(SourceItem::r#union(item_union)),
+            syn::Item::Use(item_use) => Ok(SourceItem::r#use(item_use)),
+            syn::Item::Verbatim(token_stream) => Ok(SourceItem::Verbatim(token_stream)),
+            _ => Err(Error::bail(
+                "new unsupported item type, please file an issue at https://github.com/Sajjon/klyv/issues/new",
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Deref, From)]
 pub struct Enum(ItemEnum);
 

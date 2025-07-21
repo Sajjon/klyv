@@ -1,26 +1,89 @@
-use std::{
-    fs::{self, DirEntry, ReadDir},
-    path::PathBuf,
-};
-
-use bon::builder;
-use syn::File;
+use std::{fs::DirEntry, path::PathBuf};
 
 use crate::prelude::*;
 
-#[builder]
-fn read_dir(path: impl AsRef<Path>) -> Result<ReadDir> {
-    fs::read_dir(path).map_err(Error::from)
+#[derive(Clone, Debug)]
+pub enum NodeContent {
+    Directory {
+        /// Contents of dir, either directories or files, if any.
+        children: Vec<Box<Node>>,
+    },
+    File {
+        content: Vec<SourceItem>,
+    },
+}
+impl From<NamedSourceItems> for NodeContent {
+    fn from(value: NamedSourceItems) -> Self {
+        Self::File {
+            content: value.items,
+        }
+    }
 }
 
-#[builder]
-fn read_to_string(path: impl AsRef<Path>) -> Result<String> {
-    fs::read_to_string(path).map_err(Error::from)
+#[derive(Clone, Debug, Getters, Builder)]
+pub struct Node {
+    /// Name of dir or file
+    #[getset(get = "pub")]
+    name: String,
+
+    #[getset(get = "pub")]
+    absolute_path: PathBuf,
+
+    /// Contents of this node, if this node is a dir, it contains
+    /// the children if any. If it is a file it contains its contents
+    #[getset(get = "pub")]
+    content: NodeContent,
 }
 
-#[builder]
-fn parse_file(content: &str) -> Result<File> {
-    syn::parse_file(content).map_err(Error::from)
+impl From<(PathBuf, NamedSourceItems)> for Node {
+    fn from((parent_dir, item): (PathBuf, NamedSourceItems)) -> Self {
+        let name = item.name.clone();
+        let mut absolute_path = parent_dir.clone();
+        absolute_path.push(&name);
+        Self::builder()
+            .absolute_path(absolute_path)
+            .name(name)
+            .content(NodeContent::from(item))
+            .build()
+    }
+}
+
+#[derive(Clone, Getters, Builder)]
+pub struct NamedSourceItems {
+    #[getset(get = "pub")]
+    items: Vec<SourceItem>,
+
+    /// Name of the file
+    #[getset(get = "pub")]
+    name: String,
+}
+
+#[bon]
+impl Node {
+    #[builder]
+    pub fn add_child(&mut self, items: NamedSourceItems) {
+        let parent_dir = self.absolute_path().clone();
+        match &mut self.content {
+            NodeContent::Directory { children } => {
+                children.push(Box::new(Node::from((parent_dir, items))));
+            }
+            NodeContent::File { content: _ } => {
+                panic!("A file cannot have a child, incorrect implementation")
+            }
+        }
+    }
+
+    /// Add a pre-built node as a child (useful for directories)
+    pub fn add_child_node(&mut self, child_node: Node) {
+        match &mut self.content {
+            NodeContent::Directory { children } => {
+                children.push(Box::new(child_node));
+            }
+            NodeContent::File { content: _ } => {
+                panic!("A file cannot have a child, incorrect implementation")
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -130,16 +193,7 @@ impl Tree {
     }
 }
 
-#[builder]
-pub fn find_in(path: impl AsRef<Path>) -> Result<Tree> {
-    let mut tree = Tree::Root {
-        path: path.as_ref().to_path_buf(),
-    };
-    _find_in(&mut tree)?;
-    Ok(tree)
-}
-
-fn _find_in(tree: &mut Tree) -> Result<()> {
+pub fn _find_in(tree: &mut Tree) -> Result<()> {
     println!("find in {}", tree.path().display());
     if tree.dir().is_some() {
         info!("Tree is dir");
@@ -243,45 +297,4 @@ fn find_file_in_dir(path: impl AsRef<Path>) -> Result<NamedSourceItems> {
         .name(file_name)
         .items(items)
         .build())
-}
-
-#[builder]
-fn analyze_file(file: syn::File) -> Result<Vec<SourceItem>> {
-    file.items
-        .into_iter()
-        .map(SourceItem::try_from)
-        .collect::<Result<Vec<SourceItem>>>()
-}
-
-impl TryFrom<syn::Item> for SourceItem {
-    type Error = Error;
-    fn try_from(value: syn::Item) -> Result<Self> {
-        match value {
-            syn::Item::Const(item_const) => Ok(SourceItem::unsplittable(item_const)),
-            syn::Item::Enum(item_enum) => Ok(SourceItem::r#enum(item_enum)),
-            syn::Item::ExternCrate(item_extern_crate) => {
-                Ok(SourceItem::unsplittable(item_extern_crate))
-            }
-            syn::Item::Fn(item_fn) => Ok(SourceItem::function(item_fn)),
-            syn::Item::ForeignMod(item_foreign_mod) => {
-                Ok(SourceItem::unsplittable(item_foreign_mod))
-            }
-            syn::Item::Impl(item_impl) => Ok(SourceItem::r#impl(item_impl)),
-            syn::Item::Macro(item_macro) => Ok(SourceItem::r#macro(item_macro)),
-            syn::Item::Mod(item_mod) => Ok(SourceItem::unsplittable(item_mod)),
-            syn::Item::Static(item_static) => Ok(SourceItem::unsplittable(item_static)),
-            syn::Item::Struct(item_struct) => Ok(SourceItem::r#struct(item_struct)),
-            syn::Item::Trait(item_trait) => Ok(SourceItem::r#trait(item_trait)),
-            syn::Item::TraitAlias(item_trait_alias) => {
-                Ok(SourceItem::unsplittable(item_trait_alias))
-            }
-            syn::Item::Type(item_type) => Ok(SourceItem::r#type(item_type)),
-            syn::Item::Union(item_union) => Ok(SourceItem::r#union(item_union)),
-            syn::Item::Use(item_use) => Ok(SourceItem::r#use(item_use)),
-            syn::Item::Verbatim(token_stream) => Ok(SourceItem::Verbatim(token_stream)),
-            _ => Err(Error::bail(
-                "new unsupported item type, please file an issue at https://github.com/Sajjon/klyv/issues/new",
-            )),
-        }
-    }
 }
