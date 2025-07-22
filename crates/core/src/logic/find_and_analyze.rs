@@ -1,16 +1,13 @@
 pub use crate::prelude::*;
 
 #[builder]
-pub fn find_in(path: impl AsRef<Path>) -> Result<Tree> {
-    let mut tree = Tree::Root {
-        path: path.as_ref().to_path_buf(),
-    };
-    _find_in(&mut tree)?;
-    Ok(tree)
+fn do_parse_file(content: &str) -> Result<syn::File> {
+    syn::parse_file(content).map_err(Error::from)
 }
 
 #[builder]
-pub fn analyze_file(file: syn::File) -> Result<Vec<SourceItem>> {
+pub fn parse_file(content: impl AsRef<str>) -> Result<Vec<SourceItem>> {
+    let file = do_parse_file().content(content.as_ref()).call()?;
     file.items
         .into_iter()
         .map(SourceItem::try_from)

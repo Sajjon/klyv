@@ -193,7 +193,16 @@ impl Tree {
     }
 }
 
-pub fn _find_in(tree: &mut Tree) -> Result<()> {
+#[builder]
+pub fn find_in(path: impl AsRef<Path>) -> Result<Tree> {
+    let mut tree = Tree::Root {
+        path: path.as_ref().to_path_buf(),
+    };
+    _find_in(&mut tree)?;
+    Ok(tree)
+}
+
+fn _find_in(tree: &mut Tree) -> Result<()> {
     println!("find in {}", tree.path().display());
     if tree.dir().is_some() {
         info!("Tree is dir");
@@ -291,8 +300,8 @@ fn find_file_in_dir(path: impl AsRef<Path>) -> Result<NamedSourceItems> {
         .to_os_string()
         .into_string()
         .unwrap();
-    let parsed_file = parse_file().content(&content).call()?;
-    let items = analyze_file().file(parsed_file).call()?;
+
+    let items = parse_file().content(content).call()?;
     Ok(NamedSourceItems::builder()
         .name(file_name)
         .items(items)
