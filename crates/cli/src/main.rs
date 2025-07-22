@@ -38,7 +38,7 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
     }
 }
 
-pub fn run(input: Input) -> Result<Tree> {
+pub fn run(input: Input) -> Result<FileSystemNode> {
     info!("Splitting files at {}", input.path().display());
     find_in().path(input.path()).call()
 }
