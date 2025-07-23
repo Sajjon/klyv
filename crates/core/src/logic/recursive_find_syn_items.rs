@@ -13,58 +13,63 @@ pub struct NamedSourceItems {
     name: String,
 }
 
+#[derive(Clone, Debug, Getters, Builder)]
+pub struct NodeContent<C> {
+    #[getset(get = "pub")]
+    name: String,
+    #[getset(get = "pub")]
+    path: PathBuf,
+    #[getset(get = "pub")]
+    content: C,
+}
+pub type DirectoryContent = NodeContent<Vec<FileSystemNode>>;
+pub type RustFileContent = NodeContent<NamedSourceItems>;
+
 /// A file system node that can be either a directory or a Rust file
 #[derive(Clone, Debug)]
 pub enum FileSystemNode {
     /// A directory containing other nodes
-    Directory {
-        name: String,
-        path: PathBuf,
-        children: Vec<FileSystemNode>,
-    },
+    Directory(DirectoryContent),
     /// A Rust file with parsed content
-    RustFile {
-        name: String,
-        path: PathBuf,
-        content: NamedSourceItems,
-    },
+    RustFile(RustFileContent),
 }
 
 impl FileSystemNode {
     pub fn name(&self) -> &str {
         match self {
-            Self::Directory { name, .. } => name,
-            Self::RustFile { name, .. } => name,
+            Self::Directory(dir) => dir.name(),
+            Self::RustFile(file) => file.name(),
         }
     }
 
     pub fn path(&self) -> &PathBuf {
         match self {
-            Self::Directory { path, .. } => path,
-            Self::RustFile { path, .. } => path,
+            Self::Directory(dir) => dir.path(),
+            Self::RustFile(file) => file.path(),
         }
     }
 
     /// Get all Rust files recursively from this node
     pub fn rust_files(&self) -> Vec<&NamedSourceItems> {
         match self {
-            Self::Directory { children, .. } => children
+            Self::Directory(dir) => dir
+                .content()
                 .iter()
                 .flat_map(|child| child.rust_files())
                 .collect(),
-            Self::RustFile { content, .. } => vec![content],
+            Self::RustFile(file) => vec![file.content()],
         }
     }
 
     /// Get all directories recursively from this node
     pub fn directories(&self) -> Vec<&FileSystemNode> {
         match self {
-            Self::Directory { children, .. } => {
+            Self::Directory(dir) => {
                 let mut dirs = vec![self];
-                dirs.extend(children.iter().flat_map(|child| child.directories()));
+                dirs.extend(dir.content().iter().flat_map(|child| child.directories()));
                 dirs
             }
-            Self::RustFile { .. } => vec![],
+            Self::RustFile(..) => vec![],
         }
     }
 }
@@ -145,11 +150,13 @@ fn parse_rust_file(path: PathBuf) -> Result<FileSystemNode> {
         .items(items)
         .build();
 
-    Ok(FileSystemNode::RustFile {
-        name,
-        path,
-        content: named_items,
-    })
+    let rust_file_content = NodeContent::builder()
+        .name(name)
+        .path(path)
+        .content(named_items)
+        .build();
+
+    Ok(FileSystemNode::RustFile(rust_file_content))
 }
 
 /// Scan a directory recursively using DFS
@@ -192,11 +199,13 @@ fn scan_directory(path: PathBuf) -> Result<FileSystemNode> {
 
     children.sort();
 
-    Ok(FileSystemNode::Directory {
-        name,
-        path,
-        children,
-    })
+    let directory_content = NodeContent::builder()
+        .name(name)
+        .path(path)
+        .content(children)
+        .build();
+
+    Ok(FileSystemNode::Directory(directory_content))
 }
 
 /// Parse a file content string into SourceItems
@@ -236,14 +245,18 @@ mod tests {
 
     #[test]
     fn test_file_system_node_methods() {
-        let rust_file = FileSystemNode::RustFile {
-            name: "test.rs".to_string(),
-            path: PathBuf::from("/test.rs"),
-            content: NamedSourceItems::builder()
-                .name("test.rs".to_string())
-                .items(vec![])
-                .build(),
-        };
+        let named_items = NamedSourceItems::builder()
+            .name("test.rs".to_string())
+            .items(vec![])
+            .build();
+
+        let rust_file_content = NodeContent::builder()
+            .name("test.rs".to_string())
+            .path(PathBuf::from("/test.rs"))
+            .content(named_items)
+            .build();
+
+        let rust_file = FileSystemNode::RustFile(rust_file_content);
 
         assert_eq!(rust_file.name(), "test.rs");
         assert_eq!(rust_file.rust_files().len(), 1);
@@ -328,32 +341,44 @@ mod extensive_tests {
     #[test]
     fn test_filesystem_node_ordering() {
         // Test that directories come before files and items are sorted by name
-        let dir1 = FileSystemNode::Directory {
-            name: "b_dir".to_string(),
-            path: PathBuf::from("/b_dir"),
-            children: vec![],
-        };
-        let dir2 = FileSystemNode::Directory {
-            name: "a_dir".to_string(),
-            path: PathBuf::from("/a_dir"),
-            children: vec![],
-        };
-        let file1 = FileSystemNode::RustFile {
-            name: "z_file.rs".to_string(),
-            path: PathBuf::from("/z_file.rs"),
-            content: NamedSourceItems::builder()
+        let dir1 = FileSystemNode::Directory(
+            NodeContent::builder()
+                .name("b_dir".to_string())
+                .path(PathBuf::from("/b_dir"))
+                .content(vec![])
+                .build(),
+        );
+        let dir2 = FileSystemNode::Directory(
+            NodeContent::builder()
+                .name("a_dir".to_string())
+                .path(PathBuf::from("/a_dir"))
+                .content(vec![])
+                .build(),
+        );
+        let file1 = FileSystemNode::RustFile(
+            NodeContent::builder()
                 .name("z_file.rs".to_string())
-                .items(vec![])
+                .path(PathBuf::from("/z_file.rs"))
+                .content(
+                    NamedSourceItems::builder()
+                        .name("z_file.rs".to_string())
+                        .items(vec![])
+                        .build(),
+                )
                 .build(),
-        };
-        let file2 = FileSystemNode::RustFile {
-            name: "a_file.rs".to_string(),
-            path: PathBuf::from("/a_file.rs"),
-            content: NamedSourceItems::builder()
+        );
+        let file2 = FileSystemNode::RustFile(
+            NodeContent::builder()
                 .name("a_file.rs".to_string())
-                .items(vec![])
+                .path(PathBuf::from("/a_file.rs"))
+                .content(
+                    NamedSourceItems::builder()
+                        .name("a_file.rs".to_string())
+                        .items(vec![])
+                        .build(),
+                )
                 .build(),
-        };
+        );
 
         let mut nodes = vec![file1, dir1, file2, dir2];
         nodes.sort();
