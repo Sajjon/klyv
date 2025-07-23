@@ -1,105 +1,4 @@
-use std::{fs, path::PathBuf};
-
 use crate::prelude::*;
-
-/// A named collection of source items from a single Rust file
-#[derive(Clone, Debug, Getters, Builder)]
-pub struct NamedSourceItems {
-    #[getset(get = "pub")]
-    items: Vec<SourceItem>,
-
-    /// Name of the file
-    #[getset(get = "pub")]
-    name: String,
-}
-
-#[derive(Clone, Debug, Getters, Builder)]
-pub struct NodeContent<C> {
-    #[getset(get = "pub")]
-    name: String,
-    #[getset(get = "pub")]
-    path: PathBuf,
-    #[getset(get = "pub")]
-    content: C,
-}
-pub type DirectoryContent = NodeContent<Vec<FileSystemNode>>;
-pub type RustFileContent = NodeContent<NamedSourceItems>;
-
-/// A file system node that can be either a directory or a Rust file
-#[derive(Clone, Debug)]
-pub enum FileSystemNode {
-    /// A directory containing other nodes
-    Directory(DirectoryContent),
-    /// A Rust file with parsed content
-    RustFile(RustFileContent),
-}
-
-impl FileSystemNode {
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Directory(dir) => dir.name(),
-            Self::RustFile(file) => file.name(),
-        }
-    }
-
-    pub fn path(&self) -> &PathBuf {
-        match self {
-            Self::Directory(dir) => dir.path(),
-            Self::RustFile(file) => file.path(),
-        }
-    }
-
-    /// Get all Rust files recursively from this node
-    pub fn rust_files(&self) -> Vec<&NamedSourceItems> {
-        match self {
-            Self::Directory(dir) => dir
-                .content()
-                .iter()
-                .flat_map(|child| child.rust_files())
-                .collect(),
-            Self::RustFile(file) => vec![file.content()],
-        }
-    }
-
-    /// Get all directories recursively from this node
-    pub fn directories(&self) -> Vec<&FileSystemNode> {
-        match self {
-            Self::Directory(dir) => {
-                let mut dirs = vec![self];
-                dirs.extend(dir.content().iter().flat_map(|child| child.directories()));
-                dirs
-            }
-            Self::RustFile(..) => vec![],
-        }
-    }
-}
-
-impl PartialEq for FileSystemNode {
-    fn eq(&self, other: &Self) -> bool {
-        self.name() == other.name() && self.path() == other.path()
-    }
-}
-
-impl Eq for FileSystemNode {}
-
-impl PartialOrd for FileSystemNode {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for FileSystemNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let self_is_dir = matches!(self, FileSystemNode::Directory { .. });
-        let other_is_dir = matches!(other, FileSystemNode::Directory { .. });
-
-        match (self_is_dir, other_is_dir) {
-            (true, false) => std::cmp::Ordering::Less, // Directories come first
-            (false, true) => std::cmp::Ordering::Greater, // Files come after directories
-            _ => self.name().cmp(other.name()),        // Same type: sort by name
-        }
-    }
-}
 
 /// Main entry point - recursively find and parse all Rust files in a directory
 #[bon::builder]
@@ -114,11 +13,11 @@ pub fn find_in(path: impl AsRef<std::path::Path>) -> Result<FileSystemNode> {
     }
 
     if path.is_file() {
-        return parse_rust_file(path);
+        return parse_rust_file().path(path).call();
     }
 
     if path.is_dir() {
-        return scan_directory(path);
+        return scan_directory().path(path).call();
     }
 
     Err(Error::bail(format!(
@@ -128,6 +27,7 @@ pub fn find_in(path: impl AsRef<std::path::Path>) -> Result<FileSystemNode> {
 }
 
 /// Parse a single Rust file
+#[bon::builder]
 fn parse_rust_file(path: PathBuf) -> Result<FileSystemNode> {
     let name = path
         .file_name()
@@ -160,6 +60,7 @@ fn parse_rust_file(path: PathBuf) -> Result<FileSystemNode> {
 }
 
 /// Scan a directory recursively using DFS
+#[bon::builder]
 fn scan_directory(path: PathBuf) -> Result<FileSystemNode> {
     let name = path
         .file_name()
@@ -187,10 +88,10 @@ fn scan_directory(path: PathBuf) -> Result<FileSystemNode> {
             let entry_path = entry.path();
 
             if entry_path.is_dir() {
-                scan_directory(entry_path).ok()
+                scan_directory().path(entry_path).call().ok()
             } else if entry_path.is_file() && entry_path.extension().is_some_and(|ext| ext == "rs")
             {
-                parse_rust_file(entry_path).ok()
+                parse_rust_file().path(entry_path).call().ok()
             } else {
                 None
             }
