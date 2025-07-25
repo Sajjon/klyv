@@ -1,0 +1,8 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+/// Doc about global gen magic
+pub fn global_gen_magic<T>(magic: T) -> T {
+    magic
+}

@@ -1,0 +1,8 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+/// Global magic
+pub fn global_magic() -> u8 {
+    237
+}

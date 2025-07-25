@@ -1,11 +1,12 @@
+use derive_more::TryUnwrap;
 use proc_macro2::TokenStream;
-use syn::Item;
+use syn::{Ident, Item};
 
 use crate::prelude::*;
 
 /// A Rust type, struct, enum, typealias, function, macro or implementation of
 /// struct or enum.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TryUnwrap)]
 pub enum SourceItem {
     Enum(Enum),
     Struct(Struct),
@@ -158,6 +159,49 @@ impl std::fmt::Debug for MacroRules {
 
 #[derive(Clone, Deref, From)]
 pub struct Implementation(ItemImpl);
+
+pub trait Identifiable {
+    fn ident(&self) -> &Ident;
+}
+impl Identifiable for Struct {
+    fn ident(&self) -> &Ident {
+        &self.ident
+    }
+}
+impl Identifiable for Enum {
+    fn ident(&self) -> &Ident {
+        &self.ident
+    }
+}
+
+#[bon]
+impl Implementation {
+    #[builder]
+    fn is_implementing<T: Identifiable>(&self, r#type: &T) -> bool {
+        match self.self_ty.as_ref() {
+            syn::Type::Array(_) => false,
+            syn::Type::BareFn(_) => false,
+            syn::Type::Group(_) => false,
+            syn::Type::ImplTrait(_) => false,
+            syn::Type::Infer(_) => false,
+            syn::Type::Macro(_) => false,
+            syn::Type::Never(_) => false,
+            syn::Type::Paren(_) => false,
+            syn::Type::Path(type_path) => type_path
+                .path
+                .segments
+                .iter()
+                .any(|segments| &segments.ident == r#type.ident()),
+            syn::Type::Ptr(_) => false,
+            syn::Type::Reference(_) => false,
+            syn::Type::Slice(_) => false,
+            syn::Type::TraitObject(_) => false,
+            syn::Type::Tuple(_) => false,
+            syn::Type::Verbatim(_) => false,
+            _ => false,
+        }
+    }
+}
 
 impl std::fmt::Debug for Implementation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

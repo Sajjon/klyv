@@ -1,6 +1,29 @@
 use crate::prelude::*;
 
-/// Main entry point - recursively find and parse all Rust files in a directory
+#[bon::builder]
+pub fn split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<()> {
+    let node = find_in().path(source).call()?;
+    write().node(node).out(out).call()?;
+    Ok(())
+}
+
+/// This function splits all the Rust types identified in the given path into separate files if the type is supported - see `enum SourceItem` for list of supported types.
+/// The `Unsplittable` and `Verbatim` types are not split, as they do not have
+/// a corresponding file type - they will be put in files named `unsplittable_0.rs`,
+/// `unsplittable_1.rs` and `verbatim_0.rs`, `verbatim_1.rs` etc, where the index
+/// is the order in which they were found according to the files in that folder.
+/// I.e. if `foo.rs`, `bar.rs` and `baz.rs` are found in the same directory and
+///  each of these three files contain any unsplittable items, they will be put in `unsplittable_0.rs`, `unsplittable_1.rs` and `unsplittable_2.rs` respectively.
+/// If two types with the same name are found e.g. `enum Foo` in `foo.rs` and
+/// `bar.rs`, the first one will be put in `foo_0.rs` and the second one in `bar_0.rs`.
+///
+/// For types which has `impl` blocks the impl blocks will be moved to the same
+/// file as the type they implement.
+#[bon::builder]
+pub fn write(node: FileSystemNode, out: impl AsRef<Path>) -> Result<()> {
+    node.write_to(out.as_ref())
+}
+
 #[bon::builder]
 pub fn find_in(path: impl AsRef<std::path::Path>) -> Result<FileSystemNode> {
     let path = path.as_ref().to_path_buf();

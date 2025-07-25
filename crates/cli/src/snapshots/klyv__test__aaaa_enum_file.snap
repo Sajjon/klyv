@@ -1,0 +1,31 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use std::str::FromStr;
+
+
+/// Doc about AaaaEnum
+#[derive(Clone, Debug)]
+pub enum AaaaEnum {
+    /// Doc about AaaaA variant
+    AaaaA(AaaaStructA),
+    /// Doc about AaaaB variant
+    AaaaB(AaaaStructB),
+}
+
+
+impl AaaaEnum {
+    /// Much magic
+    /// Very good number
+    /// 42 is magic
+    pub fn magic() -> u8 {
+        42
+    }
+    /// More magic
+    /// Very good number
+    /// 42 is magic
+    pub fn more_magic() -> u8 {
+        42
+    }
+}

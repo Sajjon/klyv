@@ -12,19 +12,29 @@ use std::path::PathBuf;
 #[command(version = env!("CARGO_PKG_VERSION"))]
 pub struct CliArgs {
     #[arg(long, short)]
-    path: PathBuf,
+    source: PathBuf,
+    /// If None, same dir as `source` will be used
+    #[arg(long, short)]
+    out: Option<PathBuf>,
 }
 
+/// Input for the CLI, containing the source path and optional output path
 #[derive(Clone, Debug, Builder, Getters)]
 pub struct Input {
     #[getset(get = "pub")]
-    path: PathBuf,
+    source: PathBuf,
+    /// If None, same dir as `source` will be used
+    #[getset(get = "pub")]
+    out: Option<PathBuf>,
 }
 impl TryFrom<CliArgs> for Input {
     type Error = Error;
 
     fn try_from(args: CliArgs) -> Result<Self, Self::Error> {
-        Ok(Input::builder().path(args.path).build())
+        Ok(Input::builder()
+            .source(args.source)
+            .maybe_out(args.out)
+            .build())
     }
 }
 
@@ -39,8 +49,13 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
 }
 
 pub fn run(input: Input) -> Result<FileSystemNode> {
-    info!("Splitting files at {}", input.path().display());
-    find_in().path(input.path()).call()
+    info!("Splitting files at {}", input.source().display());
+    let node = find_in().path(input.source()).call()?;
+    write()
+        .node(node.clone())
+        .out(input.out().as_ref().unwrap_or(input.source()))
+        .call()?;
+    Ok(node)
 }
 
 fn run_cli() -> Result<()> {

@@ -1,0 +1,24 @@
+---
+source: crates/cli/src/test.rs
+expression: dir_structure
+---
+- d0_a/d1_a/d2_a/aaa_mod_struct.rs
+- d0_a/d1_a/d2_a/aaaa_enum.rs
+- d0_a/d1_a/d2_a/aaaa_struct_a.rs
+- d0_a/d1_a/d2_a/aaaa_struct_b.rs
+- d0_a/d1_a/d2_a/aaab.rs
+- d0_a/d1_a/d2_a/d3_c.rs
+- d0_a/d1_a/d2_a/magic_trait.rs
+- d0_a/d1_a/d2_a/mod.rs
+- d0_a/d1_a/d2_b.rs
+- d0_a/d1_a/mod.rs
+- d0_a/d1_b/ab_astruct_a.rs
+- d0_a/d1_b/d2_a.rs
+- d0_a/d1_b/magic.rs
+- d0_a/d1_b/mod.rs
+- d0_a/d1_c/ac_union_a.rs
+- d0_a/mod.rs
+- d0_b/d1_a/mod.rs
+- d0_b/mod.rs
+- d0_c/mod.rs
+- mod.rs

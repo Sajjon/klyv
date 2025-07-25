@@ -9,6 +9,19 @@ pub enum FileSystemNode {
     RustFile(RustFileContent),
 }
 
+pub trait FileWritable {
+    fn write_to(&self, path: impl AsRef<Path>) -> Result<()>;
+}
+
+impl FileWritable for FileSystemNode {
+    fn write_to(&self, path: impl AsRef<Path>) -> Result<()> {
+        match self {
+            Self::Directory(dir) => dir.write_to(path),
+            Self::RustFile(file) => file.write_to(path),
+        }
+    }
+}
+
 impl FileSystemNode {
     pub fn name(&self) -> &str {
         match self {
