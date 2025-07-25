@@ -174,35 +174,6 @@ impl Identifiable for Enum {
     }
 }
 
-#[bon]
-impl Implementation {
-    #[builder]
-    fn is_implementing<T: Identifiable>(&self, r#type: &T) -> bool {
-        match self.self_ty.as_ref() {
-            syn::Type::Array(_) => false,
-            syn::Type::BareFn(_) => false,
-            syn::Type::Group(_) => false,
-            syn::Type::ImplTrait(_) => false,
-            syn::Type::Infer(_) => false,
-            syn::Type::Macro(_) => false,
-            syn::Type::Never(_) => false,
-            syn::Type::Paren(_) => false,
-            syn::Type::Path(type_path) => type_path
-                .path
-                .segments
-                .iter()
-                .any(|segments| &segments.ident == r#type.ident()),
-            syn::Type::Ptr(_) => false,
-            syn::Type::Reference(_) => false,
-            syn::Type::Slice(_) => false,
-            syn::Type::TraitObject(_) => false,
-            syn::Type::Tuple(_) => false,
-            syn::Type::Verbatim(_) => false,
-            _ => false,
-        }
-    }
-}
-
 impl std::fmt::Debug for Implementation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Implementation")
