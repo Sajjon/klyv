@@ -317,16 +317,33 @@ impl RustFileContent {
 
         for (i, item) in items.iter().enumerate() {
             if i > 0 {
-                content.push_str("\n\n"); // Add spacing between items
+                let spacing = self.determine_item_spacing(&items[i - 1], item);
+                content.push_str(&spacing);
             }
 
             let item_code = self.source_item_to_string(item);
-            content.push_str(&item_code);
+            // Strip trailing newlines to have full control over spacing
+            let trimmed_code = item_code.trim_end();
+            content.push_str(trimmed_code);
+        }
+
+        // Ensure the file ends with a newline
+        if !content.is_empty() {
+            content.push('\n');
         }
 
         content
     }
 
+    /// Determines the appropriate spacing between two consecutive items
+    fn determine_item_spacing(&self, prev_item: &SourceItem, current_item: &SourceItem) -> String {
+        match (prev_item, current_item) {
+            // Use statements should have single newlines between them
+            (SourceItem::Use(_), SourceItem::Use(_)) => "\n".to_string(),
+            // Everything else gets double newlines for better separation
+            _ => "\n\n".to_string(),
+        }
+    }
     /// Writes content string to the specified file path
     fn write_content_to_file(&self, content: &str, file_path: &Path) -> Result<()> {
         std::fs::write(file_path, content).map_err(|e| {
