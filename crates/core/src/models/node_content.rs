@@ -27,54 +27,67 @@ impl FileWritable for DirectoryContent {
 }
 
 impl FileWritable for RustFileContent {
-    /// This is a complex method.
+    /// Writes Rust file content to one or more files based on item types.
     ///
-    /// The content is a NamedSourceItems, which contains the items of the Rust file
-    /// and contains `items: Vec<SourceItem>`.
-    ///
-    /// This method might write to many files, depending on the items.
-    ///
-    /// Here are some examples of how it might write:
-    /// - If `items` contains a single struct and many impls of that struct, we
-    ///   write to a single file with the struct and all impls.
-    /// - If `items` contains multiple structs, we write to a file for each struct
-    ///   and its impls.
-    /// - If `items` contains a mix of structs, enums, and (global) functions, we
-    ///   write to a file for each struct and enum, and a separate file for the
-    ///   global functions.
+    /// Types are split into separate files with their implementations,
+    /// while keeping use statements and global items appropriately distributed.
     fn write_to(&self, path: impl AsRef<Path>) -> Result<()> {
-        let items = self.content().items();
         let base_path = path.as_ref();
 
-        // Create the output directory if it doesn't exist
+        // Ensure output directory exists
+        self.ensure_output_directory_exists(base_path)?;
+
+        // Group and write items to their target files
+        self.process_and_write_grouped_items(base_path)
+    }
+}
+
+/// Helper struct for doc attribute conversion results
+struct DocConversion {
+    converted_text: String,
+    next_position: usize,
+}
+
+/// Helper struct for doc attribute content parsing
+struct DocContent {
+    content: String,
+    end_position: usize,
+}
+
+impl RustFileContent {
+    /// Creates the output directory if it doesn't exist
+    fn ensure_output_directory_exists(&self, base_path: &Path) -> Result<()> {
         if let Some(parent) = base_path.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| Error::bail(format!("Failed to create directory: {}", e)))?;
         }
+        Ok(())
+    }
 
-        // Group items by their target file
+    /// Groups items by target file and writes each group to its file
+    fn process_and_write_grouped_items(&self, base_path: &Path) -> Result<()> {
+        let items = self.content().items();
         let grouped_items = self.group_items_by_target_file(items);
 
         // Write each group to its corresponding file
         for (file_name, group_items) in grouped_items {
-            let target_file = if file_name == *self.content().name() {
-                // Use the original path for items that stay in the main file
-                base_path.to_path_buf()
-            } else {
-                // Create new file path for split items
-                base_path.with_file_name(&file_name)
-            };
-
-            // For now, don't optimize use statements - just copy them all
-            // TODO: Implement smarter use statement optimization
+            let target_file = self.determine_target_file_path(base_path, &file_name);
             self.write_items_to_file(&group_items, &target_file)?;
         }
-
         Ok(())
     }
-}
 
-impl RustFileContent {
+    /// Determines the target file path for a given file name
+    fn determine_target_file_path(&self, base_path: &Path, file_name: &str) -> PathBuf {
+        if file_name == *self.content().name() {
+            // Use the original path for items that stay in the main file
+            base_path.to_path_buf()
+        } else {
+            // Create new file path for split items
+            base_path.with_file_name(file_name)
+        }
+    }
+
     /// Group items by their target file name
     /// Returns a map where keys are file names and values are vectors of items for that file
     fn group_items_by_target_file(
@@ -84,112 +97,165 @@ impl RustFileContent {
         use std::collections::HashMap;
 
         let mut groups: HashMap<String, Vec<SourceItem>> = HashMap::new();
-        let mut impl_blocks: Vec<SourceItem> = Vec::new();
-        let mut use_statements: Vec<SourceItem> = Vec::new();
+        let use_statements = self.collect_use_statements(items);
 
-        // Collect use statements separately
+        // Group type definitions with their use statements
+        self.group_type_definitions(&mut groups, items, &use_statements);
+
+        // Assign impl blocks to their corresponding types
+        self.assign_impl_blocks_to_types(&mut groups, items);
+
+        // Clean up empty original file entries
+        self.cleanup_empty_original_file_entry(&mut groups);
+
+        groups
+    }
+
+    /// Collects all use statements from the items
+    fn collect_use_statements(&self, items: &[SourceItem]) -> Vec<SourceItem> {
+        items
+            .iter()
+            .filter(|item| matches!(item, SourceItem::Use(_)))
+            .cloned()
+            .collect()
+    }
+
+    /// Groups type definitions (structs, enums, traits, etc.) with their use statements
+    fn group_type_definitions(
+        &self,
+        groups: &mut std::collections::HashMap<String, Vec<SourceItem>>,
+        items: &[SourceItem],
+        use_statements: &[SourceItem],
+    ) {
         for item in items {
-            if matches!(item, SourceItem::Use(_)) {
-                use_statements.push(item.clone());
+            if let Some(type_name) = self.extract_type_name_from_item(item) {
+                let file_name = format!("{}.rs", self.to_snake_case(&type_name));
+                self.add_item_to_group(groups, file_name, use_statements, item);
+            } else if self.is_non_type_item(item) {
+                // Functions, macros, etc. go to the original file
+                self.add_item_to_original_file(groups, item);
             }
         }
+    }
 
-        // First pass: group main types and collect impl blocks
-        for item in items {
-            match item {
-                SourceItem::Struct(s) => {
-                    let type_name = s.ident.to_string();
-                    let file_name = format!("{}.rs", self.to_snake_case(&type_name));
-                    let group = groups.entry(file_name).or_default();
-                    // Add use statements first, then the struct
-                    group.extend(use_statements.clone());
-                    group.push(item.clone());
-                }
-                SourceItem::Enum(e) => {
-                    let type_name = e.ident.to_string();
-                    let file_name = format!("{}.rs", self.to_snake_case(&type_name));
-                    let group = groups.entry(file_name).or_default();
-                    // Add use statements first, then the enum
-                    group.extend(use_statements.clone());
-                    group.push(item.clone());
-                }
-                SourceItem::Trait(t) => {
-                    let type_name = t.ident.to_string();
-                    let file_name = format!("{}.rs", self.to_snake_case(&type_name));
-                    let group = groups.entry(file_name).or_default();
-                    // Add use statements first, then the trait
-                    group.extend(use_statements.clone());
-                    group.push(item.clone());
-                }
-                SourceItem::Type(ty) => {
-                    let type_name = ty.ident.to_string();
-                    let file_name = format!("{}.rs", self.to_snake_case(&type_name));
-                    let group = groups.entry(file_name).or_default();
-                    // Add use statements first, then the type
-                    group.extend(use_statements.clone());
-                    group.push(item.clone());
-                }
-                SourceItem::Union(u) => {
-                    let type_name = u.ident.to_string();
-                    let file_name = format!("{}.rs", self.to_snake_case(&type_name));
-                    let group = groups.entry(file_name).or_default();
-                    // Add use statements first, then the union
-                    group.extend(use_statements.clone());
-                    group.push(item.clone());
-                }
-                SourceItem::Impl(_) => {
-                    // Collect impl blocks for second pass
-                    impl_blocks.push(item.clone());
-                }
-                SourceItem::Use(_) => {
-                    // Already handled above
-                }
-                _ => {
-                    // Functions, macros, etc. go to the original file
-                    groups
-                        .entry(self.content().name().clone())
-                        .or_default()
-                        .push(item.clone());
-                }
-            }
+    /// Extracts the type name from various SourceItem types
+    fn extract_type_name_from_item(&self, item: &SourceItem) -> Option<String> {
+        match item {
+            SourceItem::Struct(s) => Some(s.ident.to_string()),
+            SourceItem::Enum(e) => Some(e.ident.to_string()),
+            SourceItem::Trait(t) => Some(t.ident.to_string()),
+            SourceItem::Type(ty) => Some(ty.ident.to_string()),
+            SourceItem::Union(u) => Some(u.ident.to_string()),
+            _ => None,
         }
+    }
 
-        // Second pass: assign impl blocks to their target types
+    /// Checks if an item is a non-type item (functions, macros, etc.)
+    fn is_non_type_item(&self, item: &SourceItem) -> bool {
+        !matches!(
+            item,
+            SourceItem::Struct(_)
+                | SourceItem::Enum(_)
+                | SourceItem::Trait(_)
+                | SourceItem::Type(_)
+                | SourceItem::Union(_)
+                | SourceItem::Impl(_)
+                | SourceItem::Use(_)
+        )
+    }
+
+    /// Adds an item and its use statements to a specific group
+    fn add_item_to_group(
+        &self,
+        groups: &mut std::collections::HashMap<String, Vec<SourceItem>>,
+        file_name: String,
+        use_statements: &[SourceItem],
+        item: &SourceItem,
+    ) {
+        let group = groups.entry(file_name).or_default();
+        // Add use statements first, then the item
+        group.extend(use_statements.iter().cloned());
+        group.push(item.clone());
+    }
+
+    /// Adds an item to the original file group
+    fn add_item_to_original_file(
+        &self,
+        groups: &mut std::collections::HashMap<String, Vec<SourceItem>>,
+        item: &SourceItem,
+    ) {
+        groups
+            .entry(self.content().name().clone())
+            .or_default()
+            .push(item.clone());
+    }
+
+    /// Assigns impl blocks to their corresponding type files
+    fn assign_impl_blocks_to_types(
+        &self,
+        groups: &mut std::collections::HashMap<String, Vec<SourceItem>>,
+        items: &[SourceItem],
+    ) {
+        let impl_blocks = self.collect_impl_blocks(items);
+
         for impl_item in impl_blocks {
-            if let SourceItem::Impl(impl_block) = &impl_item {
-                let target_type = self.extract_impl_target_type(impl_block);
+            self.assign_single_impl_block(groups, &impl_item);
+        }
+    }
 
-                if let Some(type_name) = target_type {
-                    let file_name = format!("{}.rs", self.to_snake_case(&type_name));
+    /// Collects all impl blocks from the items
+    fn collect_impl_blocks(&self, items: &[SourceItem]) -> Vec<SourceItem> {
+        items
+            .iter()
+            .filter(|item| matches!(item, SourceItem::Impl(_)))
+            .cloned()
+            .collect()
+    }
 
-                    // If we have a file for this type, add the impl there
-                    if groups.contains_key(&file_name) {
-                        groups.get_mut(&file_name).unwrap().push(impl_item);
-                    } else {
-                        // Otherwise, put it in the original file
-                        groups
-                            .entry(self.content().name().clone())
-                            .or_default()
-                            .push(impl_item);
-                    }
-                } else {
-                    // Can't determine target type, put in original file
-                    groups
-                        .entry(self.content().name().clone())
-                        .or_default()
-                        .push(impl_item);
-                }
+    /// Assigns a single impl block to its target type file
+    fn assign_single_impl_block(
+        &self,
+        groups: &mut std::collections::HashMap<String, Vec<SourceItem>>,
+        impl_item: &SourceItem,
+    ) {
+        if let SourceItem::Impl(impl_block) = impl_item {
+            let target_type = self.extract_impl_target_type(impl_block);
+
+            if let Some(type_name) = target_type {
+                let file_name = format!("{}.rs", self.to_snake_case(&type_name));
+                self.try_add_impl_to_type_file(groups, &file_name, impl_item);
+            } else {
+                // Can't determine target type, put in original file
+                self.add_item_to_original_file(groups, impl_item);
             }
         }
+    }
 
-        // Remove empty original file entry if it exists and is empty
+    /// Tries to add an impl block to its type file, falls back to original file
+    fn try_add_impl_to_type_file(
+        &self,
+        groups: &mut std::collections::HashMap<String, Vec<SourceItem>>,
+        file_name: &str,
+        impl_item: &SourceItem,
+    ) {
+        if groups.contains_key(file_name) {
+            groups.get_mut(file_name).unwrap().push(impl_item.clone());
+        } else {
+            // Type file doesn't exist, put in original file
+            self.add_item_to_original_file(groups, impl_item);
+        }
+    }
+
+    /// Removes empty original file entries from the groups
+    fn cleanup_empty_original_file_entry(
+        &self,
+        groups: &mut std::collections::HashMap<String, Vec<SourceItem>>,
+    ) {
         if let Some(original_items) = groups.get(self.content().name()) {
             if original_items.is_empty() {
                 groups.remove(self.content().name());
             }
         }
-
-        groups
     }
 
     /// Convert PascalCase to snake_case
@@ -198,19 +264,34 @@ impl RustFileContent {
         let mut prev_was_lowercase = false;
 
         for ch in input.chars() {
-            if ch.is_uppercase() {
-                if prev_was_lowercase && !result.is_empty() {
-                    result.push('_');
-                }
-                result.push(ch.to_lowercase().next().unwrap());
-                prev_was_lowercase = false;
-            } else {
-                result.push(ch);
-                prev_was_lowercase = ch.is_lowercase();
-            }
+            self.process_snake_case_character(ch, &mut result, &mut prev_was_lowercase);
         }
 
         result
+    }
+
+    /// Processes a single character for snake_case conversion
+    fn process_snake_case_character(
+        &self,
+        ch: char,
+        result: &mut String,
+        prev_was_lowercase: &mut bool,
+    ) {
+        if ch.is_uppercase() {
+            self.handle_uppercase_character(ch, result, *prev_was_lowercase);
+            *prev_was_lowercase = false;
+        } else {
+            result.push(ch);
+            *prev_was_lowercase = ch.is_lowercase();
+        }
+    }
+
+    /// Handles uppercase characters in snake_case conversion
+    fn handle_uppercase_character(&self, ch: char, result: &mut String, prev_was_lowercase: bool) {
+        if prev_was_lowercase && !result.is_empty() {
+            result.push('_'); // Add underscore before uppercase letter
+        }
+        result.push(ch.to_lowercase().next().unwrap());
     }
 
     /// Extract the target type name from an impl block
@@ -226,34 +307,51 @@ impl RustFileContent {
 
     /// Helper method to write a collection of items to a file
     fn write_items_to_file(&self, items: &[SourceItem], file_path: &Path) -> Result<()> {
+        let content = self.build_file_content(items);
+        self.write_content_to_file(&content, file_path)
+    }
+
+    /// Builds the complete file content from a collection of items
+    fn build_file_content(&self, items: &[SourceItem]) -> String {
         let mut content = String::new();
 
         for (i, item) in items.iter().enumerate() {
             if i > 0 {
-                content.push_str("\n\n");
+                content.push_str("\n\n"); // Add spacing between items
             }
 
-            // Convert the SourceItem back to Rust code
             let item_code = self.source_item_to_string(item);
             content.push_str(&item_code);
         }
 
-        // Write to file
+        content
+    }
+
+    /// Writes content string to the specified file path
+    fn write_content_to_file(&self, content: &str, file_path: &Path) -> Result<()> {
         std::fs::write(file_path, content).map_err(|e| {
             Error::bail(format!(
                 "Failed to write file {}: {}",
                 file_path.display(),
                 e
             ))
-        })?;
-        Ok(())
+        })
     }
 
     /// Convert a SourceItem back to its string representation
     fn source_item_to_string(&self, item: &SourceItem) -> String {
+        let token_stream = self.convert_item_to_token_stream(item);
+        let formatted_code = self.format_token_stream(token_stream);
+
+        // Convert #[doc = "..."] attributes back to /// doc comments
+        self.convert_doc_attributes_to_comments(formatted_code)
+    }
+
+    /// Converts a SourceItem to a TokenStream
+    fn convert_item_to_token_stream(&self, item: &SourceItem) -> proc_macro2::TokenStream {
         use quote::ToTokens;
 
-        let token_stream = match item {
+        match item {
             SourceItem::Struct(s) => s.to_token_stream(),
             SourceItem::Enum(e) => e.to_token_stream(),
             SourceItem::Trait(t) => t.to_token_stream(),
@@ -265,76 +363,156 @@ impl RustFileContent {
             SourceItem::Use(u) => u.to_token_stream(),
             SourceItem::Unsplittable(item) => item.to_token_stream(),
             SourceItem::Verbatim(tokens) => tokens.clone(),
-        };
+        }
+    }
 
+    /// Formats a TokenStream using prettyplease or falls back to string conversion
+    fn format_token_stream(&self, token_stream: proc_macro2::TokenStream) -> String {
         // Parse the token stream back to a syn::File to format it properly
-        let formatted_code = if let Ok(file) = syn::parse2::<syn::File>(token_stream.clone()) {
+        if let Ok(file) = syn::parse2::<syn::File>(token_stream.clone()) {
             prettyplease::unparse(&file)
         } else {
             // Fallback to the original token stream if parsing fails
             token_stream.to_string()
-        };
-
-        // Convert #[doc = "..."] attributes back to /// doc comments
-        self.convert_doc_attributes_to_comments(formatted_code)
+        }
     }
 
     /// Convert #[doc = "text"] attributes back to /// doc comment syntax
     fn convert_doc_attributes_to_comments(&self, code: String) -> String {
         let mut result = String::new();
         let chars = code.chars().collect::<Vec<_>>();
+
+        self.process_all_characters(&chars, &mut result);
+        result
+    }
+
+    /// Processes all characters in the code for doc attribute conversion
+    fn process_all_characters(&self, chars: &[char], result: &mut String) {
         let mut i = 0;
 
         while i < chars.len() {
-            if chars[i] == '#' {
-                // Look for the pattern # [doc = " or #[doc = "
-                let mut j = i + 1;
+            i = self.process_single_character_position(chars, result, i);
+        }
+    }
 
-                // Skip optional whitespace after #
-                while j < chars.len() && chars[j].is_whitespace() && chars[j] != '\n' {
-                    j += 1;
-                }
-
-                // Check for [doc = "
-                if j + 8 < chars.len() && chars[j] == '[' {
-                    let slice: String =
-                        chars[j..std::cmp::min(j + 8, chars.len())].iter().collect();
-                    if slice.starts_with("[doc = \"") {
-                        // Found doc attribute start, find the closing quote and bracket
-                        j += 8; // Start after [doc = "
-                        let mut doc_content = String::new();
-
-                        // Find the closing quote
-                        while j < chars.len() && chars[j] != '"' {
-                            doc_content.push(chars[j]);
-                            j += 1;
-                        }
-
-                        if j < chars.len() && chars[j] == '"' {
-                            j += 1; // Skip the quote
-
-                            // Skip whitespace and find the closing bracket
-                            while j < chars.len() && chars[j].is_whitespace() && chars[j] != '\n' {
-                                j += 1;
-                            }
-
-                            if j < chars.len() && chars[j] == ']' {
-                                // Successfully found complete doc attribute
-                                result.push_str(&format!("///{}", doc_content));
-                                i = j + 1; // Continue after the ]
-                                continue;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Not a doc attribute or couldn't parse it, add the character as-is
+    /// Processes a single character position and returns the next position
+    fn process_single_character_position(
+        &self,
+        chars: &[char],
+        result: &mut String,
+        i: usize,
+    ) -> usize {
+        if let Some(doc_conversion) = self.try_convert_doc_attribute(chars, i) {
+            // Successfully converted a doc attribute
+            result.push_str(&doc_conversion.converted_text);
+            doc_conversion.next_position
+        } else {
+            // Not a doc attribute, add the character as-is
             result.push(chars[i]);
-            i += 1;
+            i + 1
+        }
+    }
+
+    /// Attempts to convert a doc attribute at the given position
+    fn try_convert_doc_attribute(&self, chars: &[char], start_pos: usize) -> Option<DocConversion> {
+        if !self.starts_with_hash(chars, start_pos) {
+            return None;
         }
 
-        result
+        let pos_after_hash = start_pos + 1;
+        let pos_after_whitespace = self.skip_whitespace_except_newline(chars, pos_after_hash);
+
+        self.try_parse_doc_attribute(chars, pos_after_whitespace)
+    }
+
+    /// Checks if the character at the given position is a hash
+    fn starts_with_hash(&self, chars: &[char], pos: usize) -> bool {
+        chars[pos] == '#'
+    }
+
+    /// Attempts to parse a doc attribute and create a DocConversion
+    fn try_parse_doc_attribute(&self, chars: &[char], pos: usize) -> Option<DocConversion> {
+        if let Some(doc_content) = self.extract_doc_attribute_content(chars, pos) {
+            let converted_text = format!("///{}", doc_content.content);
+            Some(DocConversion {
+                converted_text,
+                next_position: doc_content.end_position,
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Skips whitespace characters except newlines
+    fn skip_whitespace_except_newline(&self, chars: &[char], mut pos: usize) -> usize {
+        while pos < chars.len() && chars[pos].is_whitespace() && chars[pos] != '\n' {
+            pos += 1;
+        }
+        pos
+    }
+
+    /// Extracts content from a doc attribute if found
+    fn extract_doc_attribute_content(&self, chars: &[char], pos: usize) -> Option<DocContent> {
+        if pos + 8 >= chars.len() || chars[pos] != '[' {
+            return None;
+        }
+
+        // Check for exact pattern "[doc = \""
+        let slice: String = chars[pos..std::cmp::min(pos + 8, chars.len())]
+            .iter()
+            .collect();
+        if !slice.starts_with("[doc = \"") {
+            return None;
+        }
+
+        self.parse_doc_attribute_content(chars, pos + 8)
+    }
+
+    /// Parses the content inside a doc attribute
+    fn parse_doc_attribute_content(&self, chars: &[char], start_pos: usize) -> Option<DocContent> {
+        let (content, pos_after_quote) = self.extract_content_until_quote(chars, start_pos)?;
+        let pos_after_whitespace = self.skip_whitespace_except_newline(chars, pos_after_quote);
+
+        self.validate_closing_bracket(chars, pos_after_whitespace, content)
+    }
+
+    /// Extracts content until the closing quote
+    fn extract_content_until_quote(
+        &self,
+        chars: &[char],
+        start_pos: usize,
+    ) -> Option<(String, usize)> {
+        let mut pos = start_pos;
+        let mut content = String::new();
+
+        // Find the closing quote
+        while pos < chars.len() && chars[pos] != '"' {
+            content.push(chars[pos]);
+            pos += 1;
+        }
+
+        if pos >= chars.len() || chars[pos] != '"' {
+            None // No closing quote found
+        } else {
+            Some((content, pos + 1)) // Return content and position after quote
+        }
+    }
+
+    /// Validates the closing bracket and creates DocContent if valid
+    fn validate_closing_bracket(
+        &self,
+        chars: &[char],
+        pos: usize,
+        content: String,
+    ) -> Option<DocContent> {
+        if pos < chars.len() && chars[pos] == ']' {
+            Some(DocContent {
+                content,
+                end_position: pos + 1,
+            })
+        } else {
+            None // No closing bracket found
+        }
     }
 }
 
