@@ -26,18 +26,6 @@ impl FileWritable for DirectoryContent {
     }
 }
 
-impl SourceItem {
-    pub fn can_be_implemented(&self) -> bool {
-        matches!(
-            self,
-            SourceItem::Struct(_)
-                | SourceItem::Enum(_)
-                | SourceItem::Type(_)
-                | SourceItem::Union(_)
-        )
-    }
-}
-
 impl FileWritable for RustFileContent {
     /// This is a complex method.
     ///
