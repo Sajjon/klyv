@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::prelude::*;
@@ -38,7 +39,17 @@ impl FileWritable for RustFileContent {
         self.ensure_output_directory_exists(base_path)?;
 
         // Group and write items to their target files
-        self.process_and_write_grouped_items(base_path)
+        let items = self.content().items();
+        let grouped_items = self.group_items_by_target_file(items);
+
+        self.process_and_write_grouped_items(base_path)?;
+
+        // Update mod.rs if multiple files were created
+        if grouped_items.len() > 1 {
+            self.update_mod_file(base_path, &grouped_items)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -552,6 +563,106 @@ impl RustFileContent {
         } else {
             None // No closing bracket found
         }
+    }
+
+    /// Updates or creates mod.rs file with module declarations for split files
+    fn update_mod_file(
+        &self,
+        base_path: &Path,
+        grouped_items: &HashMap<String, Vec<SourceItem>>,
+    ) -> Result<()> {
+        let mod_file_path = if base_path.is_dir() {
+            base_path.join("mod.rs")
+        } else {
+            base_path.parent().unwrap_or(Path::new(".")).join("mod.rs")
+        };
+
+        let module_names = self.extract_module_names_from_groups(grouped_items);
+        let existing_modules = self.read_existing_modules(&mod_file_path)?;
+        let combined_modules = self.combine_module_lists(existing_modules, module_names);
+        self.write_mod_file_content(&mod_file_path, combined_modules)?;
+
+        Ok(())
+    }
+
+    /// Extracts module names from the grouped items, excluding the main file
+    fn extract_module_names_from_groups(
+        &self,
+        grouped_items: &HashMap<String, Vec<SourceItem>>,
+    ) -> Vec<String> {
+        grouped_items
+            .keys()
+            .filter(|&name| name != self.content().name())
+            .map(|name| name.trim_end_matches(".rs").to_string())
+            .collect()
+    }
+
+    /// Reads existing module declarations from mod.rs if it exists
+    fn read_existing_modules(&self, mod_file_path: &Path) -> Result<Vec<String>> {
+        if mod_file_path.exists() {
+            let content = std::fs::read_to_string(mod_file_path).map_err(|e| {
+                Error::bail(format!(
+                    "Failed to read mod.rs file {}: {}",
+                    mod_file_path.display(),
+                    e
+                ))
+            })?;
+            Ok(self.parse_module_declarations(&content))
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// Parses mod declarations from file content
+    fn parse_module_declarations(&self, content: &str) -> Vec<String> {
+        content
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.starts_with("mod ") && trimmed.ends_with(';') {
+                    Some(trimmed[4..trimmed.len() - 1].to_string())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Combines existing and new module lists, removing duplicates
+    fn combine_module_lists(&self, existing: Vec<String>, new: Vec<String>) -> Vec<String> {
+        let mut combined: Vec<String> = existing;
+        for module in new {
+            if !combined.contains(&module) {
+                combined.push(module);
+            }
+        }
+        combined.sort();
+        combined
+    }
+
+    /// Writes the mod.rs file content with module declarations and re-exports
+    fn write_mod_file_content(&self, mod_file_path: &Path, modules: Vec<String>) -> Result<()> {
+        let mut content = String::new();
+
+        // Add mod declarations
+        for module in &modules {
+            content.push_str(&format!("mod {};\n", module));
+        }
+
+        content.push('\n');
+
+        // Add pub use re-exports
+        for module in &modules {
+            content.push_str(&format!("pub use {}::*;\n", module));
+        }
+
+        std::fs::write(mod_file_path, content).map_err(|e| {
+            Error::bail(format!(
+                "Failed to write mod.rs file {}: {}",
+                mod_file_path.display(),
+                e
+            ))
+        })
     }
 }
 
