@@ -81,9 +81,31 @@ impl RustFileContent {
     fn determine_target_file_path(&self, base_path: &Path, file_name: &str) -> PathBuf {
         if file_name == *self.content().name() {
             // Use the original path for items that stay in the main file
-            base_path.to_path_buf()
+            self.handle_original_file_path(base_path)
         } else {
             // Create new file path for split items
+            self.create_split_file_path(base_path, file_name)
+        }
+    }
+
+    /// Handles the original file path logic
+    fn handle_original_file_path(&self, base_path: &Path) -> PathBuf {
+        if base_path.is_dir() {
+            // If output is a directory, place the original file in it
+            base_path.join(self.content().name())
+        } else {
+            // If output is a file path, use it directly
+            base_path.to_path_buf()
+        }
+    }
+
+    /// Creates a path for split files
+    fn create_split_file_path(&self, base_path: &Path, file_name: &str) -> PathBuf {
+        if base_path.is_dir() {
+            // If output is a directory, place the new file in it
+            base_path.join(file_name)
+        } else {
+            // If output is a file path, replace the file name component
             base_path.with_file_name(file_name)
         }
     }
