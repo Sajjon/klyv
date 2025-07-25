@@ -28,13 +28,23 @@ pub fn write(node: FileSystemNode, out: impl AsRef<Path>) -> Result<()> {
 pub fn find_in(path: impl AsRef<std::path::Path>) -> Result<FileSystemNode> {
     let path = path.as_ref().to_path_buf();
 
+    validate_path_exists(&path)?;
+    determine_path_type_and_parse(path)
+}
+
+/// Validates that the given path exists
+fn validate_path_exists(path: &Path) -> Result<()> {
     if !path.exists() {
         return Err(Error::bail(format!(
             "Path does not exist: {}",
             path.display()
         )));
     }
+    Ok(())
+}
 
+/// Determines path type (file/directory) and calls appropriate parser
+fn determine_path_type_and_parse(path: PathBuf) -> Result<FileSystemNode> {
     if path.is_file() {
         return parse_rust_file().path(path).call();
     }
@@ -52,22 +62,45 @@ pub fn find_in(path: impl AsRef<std::path::Path>) -> Result<FileSystemNode> {
 /// Parse a single Rust file
 #[bon::builder]
 fn parse_rust_file(path: PathBuf) -> Result<FileSystemNode> {
+    let name = extract_file_name(&path)?;
+    validate_rust_file_extension(&path)?;
+
+    let content = read_file_content(&path)?;
+    let items = parse_file().content(content).call()?;
+
+    create_rust_file_node(name, path, items)
+}
+
+/// Extracts the file name from a path
+fn extract_file_name(path: &Path) -> Result<String> {
     let name = path
         .file_name()
         .ok_or_else(|| Error::bail("Invalid file name"))?
         .to_string_lossy()
         .to_string();
+    Ok(name)
+}
 
-    // Only process .rs files
+/// Validates that the file has a .rs extension
+fn validate_rust_file_extension(path: &Path) -> Result<()> {
     if path.extension().is_none_or(|ext| ext != "rs") {
         return Err(Error::bail(format!("Not a Rust file: {}", path.display())));
     }
+    Ok(())
+}
 
-    let content = fs::read_to_string(&path)
-        .map_err(|e| Error::bail(format!("Failed to read file {}: {}", path.display(), e)))?;
+/// Reads the content of a file as a string
+fn read_file_content(path: &Path) -> Result<String> {
+    fs::read_to_string(path)
+        .map_err(|e| Error::bail(format!("Failed to read file {}: {}", path.display(), e)))
+}
 
-    let items = parse_file().content(content).call()?;
-
+/// Creates a FileSystemNode::RustFile from parsed components
+fn create_rust_file_node(
+    name: String,
+    path: PathBuf,
+    items: Vec<SourceItem>,
+) -> Result<FileSystemNode> {
     let named_items = NamedSourceItems::builder()
         .name(name.clone())
         .items(items)
@@ -85,44 +118,84 @@ fn parse_rust_file(path: PathBuf) -> Result<FileSystemNode> {
 /// Scan a directory recursively using DFS
 #[bon::builder]
 fn scan_directory(path: PathBuf) -> Result<FileSystemNode> {
-    let name = path
-        .file_name()
+    let name = extract_directory_name(&path);
+    let entries = read_directory_entries(&path)?;
+
+    let mut children = process_directory_entries(entries);
+    children.sort();
+
+    create_directory_node(name, path, children)
+}
+
+/// Extracts the directory name from a path
+fn extract_directory_name(path: &Path) -> String {
+    path.file_name()
         .unwrap_or_default()
         .to_string_lossy()
-        .to_string();
+        .to_string()
+}
 
-    let entries = fs::read_dir(&path).map_err(|e| {
+/// Reads directory entries with error handling
+fn read_directory_entries(path: &Path) -> Result<fs::ReadDir> {
+    fs::read_dir(path).map_err(|e| {
         Error::bail(format!(
             "Failed to read directory {}: {}",
             path.display(),
             e
         ))
-    })?;
+    })
+}
 
-    let mut children = entries
-        .filter_map(|entry| {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => {
-                    eprintln!("Warning: Failed to read directory entry: {}", e);
-                    return None;
-                }
-            };
-            let entry_path = entry.path();
+/// Processes directory entries and filters for valid Rust files and subdirectories
+fn process_directory_entries(entries: fs::ReadDir) -> Vec<FileSystemNode> {
+    entries.filter_map(process_single_directory_entry).collect()
+}
 
-            if entry_path.is_dir() {
-                scan_directory().path(entry_path).call().ok()
-            } else if entry_path.is_file() && entry_path.extension().is_some_and(|ext| ext == "rs")
-            {
-                parse_rust_file().path(entry_path).call().ok()
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
+/// Processes a single directory entry
+fn process_single_directory_entry(
+    entry: Result<fs::DirEntry, std::io::Error>,
+) -> Option<FileSystemNode> {
+    let entry = handle_directory_entry_error(entry)?;
+    let entry_path = entry.path();
 
-    children.sort();
+    classify_and_parse_path(entry_path)
+}
 
+/// Handles errors when reading directory entries
+fn handle_directory_entry_error(
+    entry: Result<fs::DirEntry, std::io::Error>,
+) -> Option<fs::DirEntry> {
+    match entry {
+        Ok(e) => Some(e),
+        Err(e) => {
+            eprintln!("Warning: Failed to read directory entry: {}", e);
+            None
+        }
+    }
+}
+
+/// Classifies path type and calls appropriate parser
+fn classify_and_parse_path(entry_path: PathBuf) -> Option<FileSystemNode> {
+    if entry_path.is_dir() {
+        scan_directory().path(entry_path).call().ok()
+    } else if is_rust_file(&entry_path) {
+        parse_rust_file().path(entry_path).call().ok()
+    } else {
+        None
+    }
+}
+
+/// Checks if a path is a Rust file
+fn is_rust_file(path: &Path) -> bool {
+    path.is_file() && path.extension().is_some_and(|ext| ext == "rs")
+}
+
+/// Creates a FileSystemNode::Directory from components
+fn create_directory_node(
+    name: String,
+    path: PathBuf,
+    children: Vec<FileSystemNode>,
+) -> Result<FileSystemNode> {
     let directory_content = NodeContent::builder()
         .name(name)
         .path(path)
