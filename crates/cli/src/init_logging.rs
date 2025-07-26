@@ -33,7 +33,7 @@ fn configure_fern_dispatcher(log_level: log::LevelFilter) {
         .level(log_level)
         .chain(std::io::stdout())
         .apply()
-        .inspect_err(|e| println!("💥 Failed to initialize logging with level `{log_level}`: {e}"))
+        .inspect_err(|e| eprintln!("💥 Failed to initialize logging with level `{log_level}`: {e}"))
         .unwrap();
 }
 

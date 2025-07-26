@@ -41,9 +41,9 @@ pub fn parse_command_line_args() -> Vec<String> {
 
 /// CLI-specific helper function
 pub fn display_help() {
-    println!("Usage: myapp [OPTIONS] [FILES]");
-    println!("Options:");
-    println!("  -v, --verbose    Enable verbose output");
-    println!("  -o, --output     Specify output directory");
-    println!("  -h, --help       Show this help message");
+    info!("Usage: myapp [OPTIONS] [FILES]");
+    info!("Options:");
+    info!("  -v, --verbose    Enable verbose output");
+    info!("  -o, --output     Specify output directory");
+    info!("  -h, --help       Show this help message");
 }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Display;
+use log::info;
 
 /// A user entity with authentication capabilities
 #[derive(Debug, Clone, PartialEq)]
@@ -96,5 +97,5 @@ fn generate_id() -> u32 {
 /// Activates a user account
 pub fn activate_user(user: &mut User) {
     // Implementation would set user status to active
-    println!("User {} activated", user.name);
+    info!("User {} activated", user.name);
 }

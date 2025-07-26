@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
+use log::{info, debug, error};
 
 /// Configuration for the CLI application
 #[derive(Debug, Clone)]
@@ -149,11 +150,11 @@ pub fn parse_command_line_args() -> Vec<String> {
 
 /// CLI-specific helper function
 pub fn display_help() {
-    println!("Usage: myapp [OPTIONS] [FILES]");
-    println!("Options:");
-    println!("  -v, --verbose    Enable verbose output");
-    println!("  -o, --output     Specify output directory");
-    println!("  -h, --help       Show this help message");
+    info!("Usage: myapp [OPTIONS] [FILES]");
+    info!("Options:");
+    info!("  -v, --verbose    Enable verbose output");
+    info!("  -o, --output     Specify output directory");
+    info!("  -h, --help       Show this help message");
 }
 
 fn main() {
@@ -161,14 +162,14 @@ fn main() {
     let config = match parser.parse() {
         Ok(cfg) => cfg,
         Err(e) => {
-            eprintln!("Error parsing arguments: {}", e);
+            error!("Error parsing arguments: {}", e);
             display_help();
             std::process::exit(1);
         }
     };
 
     if config.verbose {
-        println!("Verbose mode enabled");
+        debug!("Verbose mode enabled");
     }
 
     let mut processor = FileProcessor::new();
@@ -177,14 +178,14 @@ fn main() {
         match processor.process_file(file) {
             Ok(result) => {
                 if config.verbose {
-                    println!("{}", result);
+                    debug!("{}", result);
                 }
             }
             Err(e) => {
-                eprintln!("Error processing {}: {}", file.display(), e);
+                error!("Error processing {}: {}", file.display(), e);
             }
         }
     }
 
-    println!("Processing complete. Cache size: {}", processor.get_cache_size());
+    info!("Processing complete. Cache size: {}", processor.get_cache_size());
 }

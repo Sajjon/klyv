@@ -47,5 +47,5 @@ fn generate_id() -> u32 {
 
 /// Activates a user account
 pub fn activate_user(user: &mut User) {
-    println!("User {} activated", user.name);
+    info!("User {} activated", user.name);
 }

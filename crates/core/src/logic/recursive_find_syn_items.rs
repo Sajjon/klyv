@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use log::warn;
 
 #[bon::builder]
 pub fn split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<()> {
@@ -168,7 +169,7 @@ fn handle_directory_entry_error(
     match entry {
         Ok(e) => Some(e),
         Err(e) => {
-            eprintln!("Warning: Failed to read directory entry: {}", e);
+            warn!("Warning: Failed to read directory entry: {}", e);
             None
         }
     }

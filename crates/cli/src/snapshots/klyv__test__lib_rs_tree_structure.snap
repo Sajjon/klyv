@@ -66,6 +66,27 @@ RustFile(
                         ),
                     ),
                 ),
+                Use(
+                    Use(
+                        Visibility::Inherited,
+                        [],
+                        UseTree::Path(
+                            UsePath {
+                                ident: Ident(
+                                    log,
+                                ),
+                                colon2_token: PathSep,
+                                tree: UseTree::Name(
+                                    UseName {
+                                        ident: Ident(
+                                            info,
+                                        ),
+                                    },
+                                ),
+                            },
+                        ),
+                    ),
+                ),
                 Struct(
                     Struct(
                         Visibility::Public(
