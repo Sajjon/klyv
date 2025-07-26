@@ -78,6 +78,8 @@ impl RustFileContent {
 
     // Constants for module names
     const MAIN_FUNCTION: &'static str = "main";
+    const UTILS_MODULE: &'static str = "utils";
+    const FUNCTIONS_MODULE: &'static str = "functions";
 
     // Constants for common patterns
     const DOC_ATTR_PREFIX: &'static str = "[doc = \"";
@@ -753,7 +755,7 @@ impl RustFileContent {
         let type_count = items.iter().filter(|item| self.is_type_item(item)).count();
         let non_main_function_count = items
             .iter()
-            .filter(|item| matches!(item, SourceItem::Function(f) if f.sig.ident != "main"))
+            .filter(|item| matches!(item, SourceItem::Function(f) if f.sig.ident != Self::MAIN_FUNCTION))
             .count();
 
         type_count > 0 || non_main_function_count > 0
@@ -1063,7 +1065,7 @@ impl RustFileContent {
     fn create_types_mod_rs(&self, types_dir: &Path, items: &[SourceItem]) -> Result<()> {
         let grouped_items = self.group_items_by_target_file(items);
         let module_names = self.extract_module_names_for_organized_items(&grouped_items);
-        self.write_mod_file_content(&types_dir.join("mod.rs"), module_names)?;
+        self.write_mod_file_content(&types_dir.join(Self::MOD_RS), module_names)?;
         Ok(())
     }
 
@@ -1071,8 +1073,8 @@ impl RustFileContent {
     fn create_logic_mod_rs(&self, logic_dir: &Path, items: &[SourceItem]) -> Result<()> {
         if !items.is_empty() {
             // For logic items, we always create functions.rs
-            let module_names = vec!["functions".to_string()];
-            self.write_mod_file_content(&logic_dir.join("mod.rs"), module_names)?;
+            let module_names = vec![Self::FUNCTIONS_MODULE.to_string()];
+            self.write_mod_file_content(&logic_dir.join(Self::MOD_RS), module_names)?;
         }
         Ok(())
     }
@@ -1084,7 +1086,7 @@ impl RustFileContent {
     ) -> Vec<String> {
         let mut module_names: Vec<String> = grouped_items
             .keys()
-            .map(|name| name.trim_end_matches(".rs").to_string())
+            .map(|name| name.trim_end_matches(Self::RS_EXTENSION).to_string())
             .collect();
         module_names.sort();
         module_names
@@ -1107,7 +1109,7 @@ impl RustFileContent {
     /// Determines the path for the lib.rs file
     fn determine_lib_rs_path(&self, base_path: &Path) -> PathBuf {
         if base_path.is_dir() {
-            base_path.join("lib.rs")
+            base_path.join(Self::LIB_RS)
         } else {
             base_path.to_path_buf()
         }
@@ -1201,7 +1203,7 @@ impl RustFileContent {
         main_items: &[SourceItem],
     ) -> Result<()> {
         let main_rs_path = if base_path.is_dir() {
-            base_path.join("main.rs")
+            base_path.join(Self::MAIN_RS)
         } else {
             base_path.to_path_buf()
         };
@@ -1253,12 +1255,12 @@ impl RustFileContent {
 
         // Add utils module if there are functions
         if has_functions {
-            module_names.push("utils".to_string());
+            module_names.push(Self::UTILS_MODULE.to_string());
         }
 
         if !module_names.is_empty() {
             module_names.sort();
-            let mod_rs_path = base_path.join("mod.rs");
+            let mod_rs_path = base_path.join(Self::MOD_RS);
             self.write_mod_file_content(&mod_rs_path, module_names)?;
         }
 
