@@ -38,15 +38,26 @@ impl FileWritable for RustFileContent {
         // Ensure output directory exists
         self.ensure_output_directory_exists(base_path)?;
 
-        // Group and write items to their target files
-        let items = self.content().items();
-        let grouped_items = self.group_items_by_target_file(items);
+        // Check if this is a special lib.rs case
+        if self.is_lib_rs_special_case() {
+            println!("DEBUG: Detected lib.rs special case");
+            self.handle_lib_rs_special_case(base_path)?;
+        } else {
+            // Standard file splitting logic
+            let items = self.content().items();
+            let grouped_items = self.group_items_by_target_file(items);
 
-        self.process_and_write_grouped_items(base_path)?;
+            println!("DEBUG: Found {} item groups", grouped_items.len());
 
-        // Update mod.rs if multiple files were created
-        if grouped_items.len() > 1 {
-            self.update_mod_file(base_path, &grouped_items)?;
+            self.process_and_write_grouped_items(base_path)?;
+
+            // Update mod.rs if multiple files were created
+            if grouped_items.len() > 1 {
+                println!("DEBUG: Multiple files created, updating mod.rs");
+                self.update_mod_file(base_path, &grouped_items)?;
+            } else {
+                println!("DEBUG: Only one file, skipping mod.rs update");
+            }
         }
 
         Ok(())
@@ -663,6 +674,239 @@ impl RustFileContent {
                 e
             ))
         })
+    }
+
+    /// Checks if this is a lib.rs file that should receive special treatment
+    fn is_lib_rs_special_case(&self) -> bool {
+        let file_name = self.content().name();
+        file_name == "lib.rs" && self.has_multiple_types_or_functions()
+    }
+
+    /// Checks if the file has multiple types or functions that warrant special organization
+    fn has_multiple_types_or_functions(&self) -> bool {
+        let items = self.content().items();
+        let type_count = items.iter().filter(|item| self.is_type_item(item)).count();
+        let function_count = items
+            .iter()
+            .filter(|item| matches!(item, SourceItem::Function(_)))
+            .count();
+
+        type_count > 0 || function_count > 0
+    }
+
+    /// Handles the special lib.rs case by organizing into types and logic folders
+    fn handle_lib_rs_special_case(&self, base_path: &Path) -> Result<()> {
+        let items = self.content().items();
+        let (type_items, logic_items, other_items) = self.categorize_lib_rs_items(items);
+
+        // Create types folder and files if there are type items
+        if !type_items.is_empty() {
+            let types_dir = base_path.join("types");
+            std::fs::create_dir_all(&types_dir)
+                .map_err(|e| Error::bail(format!("Failed to create types directory: {}", e)))?;
+            self.write_organized_items(&type_items, &types_dir, "types")?;
+            self.create_types_mod_rs(&types_dir, &type_items)?;
+        }
+
+        // Create logic folder and files if there are function items
+        if !logic_items.is_empty() {
+            let logic_dir = base_path.join("logic");
+            std::fs::create_dir_all(&logic_dir)
+                .map_err(|e| Error::bail(format!("Failed to create logic directory: {}", e)))?;
+            self.write_organized_items(&logic_items, &logic_dir, "logic")?;
+            self.create_logic_mod_rs(&logic_dir, &logic_items)?;
+        }
+
+        // Create the new lib.rs with prelude module
+        self.create_lib_rs_with_prelude(
+            base_path,
+            !type_items.is_empty(),
+            !logic_items.is_empty(),
+            &other_items,
+        )?;
+
+        Ok(())
+    }
+
+    /// Categorizes items into types, logic (functions), and other items
+    fn categorize_lib_rs_items(
+        &self,
+        items: &[SourceItem],
+    ) -> (Vec<SourceItem>, Vec<SourceItem>, Vec<SourceItem>) {
+        let mut type_items = Vec::new();
+        let mut logic_items = Vec::new();
+        let mut other_items = Vec::new();
+
+        for item in items {
+            match item {
+                SourceItem::Function(_) => logic_items.push(item.clone()),
+                _ if self.is_type_item(item) => type_items.push(item.clone()),
+                _ => other_items.push(item.clone()),
+            }
+        }
+
+        (type_items, logic_items, other_items)
+    }
+
+    /// Checks if an item is a type (struct, enum, trait, type alias, union, impl)
+    fn is_type_item(&self, item: &SourceItem) -> bool {
+        matches!(
+            item,
+            SourceItem::Struct(_)
+                | SourceItem::Enum(_)
+                | SourceItem::Trait(_)
+                | SourceItem::Type(_)
+                | SourceItem::Union(_)
+                | SourceItem::Impl(_)
+        )
+    }
+
+    /// Writes organized items to separate files in the given directory
+    fn write_organized_items(
+        &self,
+        items: &[SourceItem],
+        dir: &Path,
+        category: &str,
+    ) -> Result<()> {
+        if category == "logic" {
+            // For logic items (functions), group them all into functions.rs
+            let target_file = dir.join("functions.rs");
+            let content = self.build_organized_file_content(items, category);
+            self.write_content_to_file(&content, &target_file)?;
+        } else {
+            // For type items, use the standard grouping
+            let grouped_items = self.group_items_by_target_file(items);
+
+            for (file_name, group_items) in grouped_items {
+                let target_file = dir.join(&file_name);
+                let content = self.build_organized_file_content(&group_items, category);
+                self.write_content_to_file(&content, &target_file)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Builds file content for organized items with proper prelude import
+    fn build_organized_file_content(&self, items: &[SourceItem], _category: &str) -> String {
+        let mut content = String::new();
+
+        // Add prelude import at the top
+        content.push_str("use crate::prelude::*;\n\n");
+
+        // Add items with proper spacing
+        for (i, item) in items.iter().enumerate() {
+            if i > 0 {
+                let spacing = self.determine_item_spacing(&items[i - 1], item);
+                content.push_str(&spacing);
+            }
+            content.push_str(&self.source_item_to_string(item));
+            content.push('\n');
+        }
+
+        content
+    }
+
+    /// Creates mod.rs for the types directory
+    fn create_types_mod_rs(&self, types_dir: &Path, items: &[SourceItem]) -> Result<()> {
+        let grouped_items = self.group_items_by_target_file(items);
+        let module_names = self.extract_module_names_for_organized_items(&grouped_items);
+        self.write_mod_file_content(&types_dir.join("mod.rs"), module_names)?;
+        Ok(())
+    }
+
+    /// Creates mod.rs for the logic directory  
+    fn create_logic_mod_rs(&self, logic_dir: &Path, items: &[SourceItem]) -> Result<()> {
+        if !items.is_empty() {
+            // For logic items, we always create functions.rs
+            let module_names = vec!["functions".to_string()];
+            self.write_mod_file_content(&logic_dir.join("mod.rs"), module_names)?;
+        }
+        Ok(())
+    }
+
+    /// Extracts module names for organized items (doesn't filter out main file name)
+    fn extract_module_names_for_organized_items(
+        &self,
+        grouped_items: &HashMap<String, Vec<SourceItem>>,
+    ) -> Vec<String> {
+        let mut module_names: Vec<String> = grouped_items
+            .keys()
+            .map(|name| name.trim_end_matches(".rs").to_string())
+            .collect();
+        module_names.sort();
+        module_names
+    }
+
+    /// Creates the new lib.rs file with prelude module structure
+    fn create_lib_rs_with_prelude(
+        &self,
+        base_path: &Path,
+        has_types: bool,
+        has_logic: bool,
+        other_items: &[SourceItem],
+    ) -> Result<()> {
+        let lib_rs_path = if base_path.is_dir() {
+            base_path.join("lib.rs")
+        } else {
+            base_path.to_path_buf()
+        };
+
+        let mut content = String::new();
+
+        // Add module declarations
+        if has_logic {
+            content.push_str("mod logic;\n");
+        }
+        if has_types {
+            content.push_str("mod types;\n");
+        }
+
+        // Add any remaining items (like use statements)
+        if !other_items.is_empty() {
+            content.push('\n');
+            for (i, item) in other_items.iter().enumerate() {
+                if i > 0 {
+                    let spacing = self.determine_item_spacing(&other_items[i - 1], item);
+                    content.push_str(&spacing);
+                }
+                content.push_str(&self.source_item_to_string(item));
+                content.push('\n');
+            }
+        }
+
+        // Add prelude module
+        content.push_str("\npub mod prelude {\n");
+        if has_logic {
+            content.push_str("    pub use crate::logic::*;\n");
+        }
+        if has_types {
+            content.push_str("    pub use crate::types::*;\n");
+        }
+
+        // Add common external crates if we detect this is a fresh lib.rs
+        if self.should_add_common_imports(other_items) {
+            content.push('\n');
+            content.push_str("    pub use std::{\n");
+            content.push_str("        collections::HashMap,\n");
+            content.push_str("        path::{Path, PathBuf},\n");
+            content.push_str("    };\n");
+        }
+
+        content.push_str("}\n");
+
+        self.write_content_to_file(&content, &lib_rs_path)?;
+        Ok(())
+    }
+
+    /// Checks if we should add common imports (when there are minimal existing imports)
+    fn should_add_common_imports(&self, other_items: &[SourceItem]) -> bool {
+        // Add common imports if there are few or no existing use statements
+        let use_count = other_items
+            .iter()
+            .filter(|item| matches!(item, SourceItem::Use(_)))
+            .count();
+        use_count <= 2 // Only if there are 2 or fewer existing use statements
     }
 }
 

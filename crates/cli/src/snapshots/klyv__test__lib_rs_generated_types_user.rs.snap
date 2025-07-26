@@ -1,0 +1,30 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// A user entity with authentication capabilities
+#[derive(Debug, Clone, PartialEq)]
+pub struct User {
+    pub id: u32,
+    pub name: String,
+    pub email: String,
+    pub role: Role,
+}
+
+
+
+impl Identifiable for User {
+    fn id(&self) -> u32 {
+        self.id
+    }
+}
+
+
+
+impl Validatable for User {
+    fn is_valid(&self) -> bool {
+        !self.name.is_empty() && self.email.contains('@')
+    }
+}

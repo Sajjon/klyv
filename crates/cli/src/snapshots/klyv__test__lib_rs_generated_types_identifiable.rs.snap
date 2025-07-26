@@ -1,0 +1,10 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Trait for items that can be identified
+pub trait Identifiable {
+    fn id(&self) -> u32;
+}

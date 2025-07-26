@@ -1,0 +1,14 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Current status of a user
+#[derive(Debug)]
+pub enum Status {
+    Active,
+    Inactive,
+    Pending,
+    Suspended,
+}

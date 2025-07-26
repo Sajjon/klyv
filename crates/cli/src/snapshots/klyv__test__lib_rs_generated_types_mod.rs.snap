@@ -1,0 +1,15 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+mod identifiable;
+mod role;
+mod status;
+mod user;
+mod validatable;
+
+pub use identifiable::*;
+pub use role::*;
+pub use status::*;
+pub use user::*;
+pub use validatable::*;

@@ -93,3 +93,105 @@ fn collect_files_recursive(
         }
     }
 }
+
+#[test]
+fn test_lib_rs_special_case_handling() {
+    let mut source_path = env::current_dir().unwrap();
+    source_path.push("src/fixtures/lib_rs_special/lib.rs");
+
+    // Use a temporary directory that will be cleaned up automatically
+    let temp_dir = TempDir::new().unwrap();
+    let out_path = temp_dir.path().to_path_buf();
+
+    let input = Input::builder()
+        .source(source_path.to_path_buf())
+        .maybe_out(Some(out_path.clone()))
+        .build();
+
+    let tree = run(input).unwrap();
+
+    // Verify the tree structure
+    let debug = format!("{:#?}", tree);
+    insta::assert_snapshot!("lib_rs_tree_structure", debug);
+
+    // Collect all generated files and their contents
+    let mut files_content = std::collections::BTreeMap::new();
+    collect_all_files_content(&out_path, &mut files_content);
+
+    // Snapshot all file contents
+    for (file_path, content) in &files_content {
+        let snapshot_name = format!("lib_rs_generated_{}", file_path.replace(['/', '\\'], "_"));
+        insta::assert_snapshot!(snapshot_name, content);
+    }
+
+    // Verify expected structure exists
+    assert!(
+        out_path.join("lib.rs").exists(),
+        "lib.rs should be generated"
+    );
+    assert!(
+        out_path.join("types").exists(),
+        "types directory should be created"
+    );
+    assert!(
+        out_path.join("logic").exists(),
+        "logic directory should be created"
+    );
+    assert!(
+        out_path.join("types/mod.rs").exists(),
+        "types/mod.rs should be created"
+    );
+    assert!(
+        out_path.join("logic/mod.rs").exists(),
+        "logic/mod.rs should be created"
+    );
+    assert!(
+        out_path.join("logic/functions.rs").exists(),
+        "logic/functions.rs should be created"
+    );
+
+    // Verify some specific type files exist
+    assert!(
+        out_path.join("types/user.rs").exists(),
+        "types/user.rs should be created"
+    );
+    assert!(
+        out_path.join("types/role.rs").exists(),
+        "types/role.rs should be created"
+    );
+    assert!(
+        out_path.join("types/status.rs").exists(),
+        "types/status.rs should be created"
+    );
+}
+
+/// Recursively collects all .rs file contents from a directory
+fn collect_all_files_content(
+    base: &std::path::Path,
+    files_content: &mut std::collections::BTreeMap<String, String>,
+) {
+    collect_files_content_recursive(base, base, files_content);
+}
+
+/// Helper function to recursively collect file contents
+fn collect_files_content_recursive(
+    base: &std::path::Path,
+    current: &std::path::Path,
+    files_content: &mut std::collections::BTreeMap<String, String>,
+) {
+    if let Ok(entries) = fs::read_dir(current) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "rs") {
+                if let Ok(relative) = path.strip_prefix(base) {
+                    let relative_str = relative.to_string_lossy().to_string();
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        files_content.insert(relative_str, content);
+                    }
+                }
+            } else if path.is_dir() {
+                collect_files_content_recursive(base, &path, files_content);
+            }
+        }
+    }
+}

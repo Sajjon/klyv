@@ -1,0 +1,25 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// User roles in the system
+#[derive(Debug, Clone, PartialEq)]
+pub enum Role {
+    Admin,
+    User,
+    Guest,
+}
+
+
+
+impl Display for Role {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Role::Admin => write!(f, "Administrator"),
+            Role::User => write!(f, "User"),
+            Role::Guest => write!(f, "Guest"),
+        }
+    }
+}

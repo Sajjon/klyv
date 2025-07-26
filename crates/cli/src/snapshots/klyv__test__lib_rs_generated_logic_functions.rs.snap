@@ -1,0 +1,51 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Creates a new user with the given details
+pub fn create_user(name: String, email: String, role: Role) -> User {
+    User {
+        id: generate_id(),
+        name,
+        email,
+        role,
+    }
+}
+
+
+
+/// Validates an email address format
+pub fn validate_email(email: &str) -> bool {
+    email.contains('@') && email.contains('.') && email.len() > 5
+}
+
+
+
+/// Gets the count of users in a collection
+pub fn get_user_count(users: &HashMap<u32, User>) -> usize {
+    users.len()
+}
+
+
+
+/// Finds a user by their ID
+pub fn find_user_by_id(users: &HashMap<u32, User>, id: u32) -> Option<&User> {
+    users.get(&id)
+}
+
+
+
+/// Generates a unique ID (simplified version)
+fn generate_id() -> u32 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as u32
+}
+
+
+
+/// Activates a user account
+pub fn activate_user(user: &mut User) {
+    println!("User {} activated", user.name);
+}

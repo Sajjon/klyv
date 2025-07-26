@@ -1,0 +1,10 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Trait for items that can be validated
+pub trait Validatable {
+    fn is_valid(&self) -> bool;
+}

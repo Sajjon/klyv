@@ -1,0 +1,22 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+mod logic;
+mod types;
+
+use std::collections::HashMap;
+
+
+use std::fmt::Display;
+
+
+pub mod prelude {
+    pub use crate::logic::*;
+    pub use crate::types::*;
+
+    pub use std::{
+        collections::HashMap,
+        path::{Path, PathBuf},
+    };
+}

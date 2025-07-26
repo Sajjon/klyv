@@ -1,0 +1,7 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+mod functions;
+
+pub use functions::*;
