@@ -38,30 +38,7 @@ impl FileWritable for RustFileContent {
         // Ensure output directory exists
         self.ensure_output_directory_exists(base_path)?;
 
-        // Check if this is a special lib.rs case
-        if self.is_lib_rs_special_case() {
-            debug!("Detected lib.rs special case");
-            self.handle_lib_rs_special_case(base_path)?;
-        } else if self.is_main_rs_special_case() {
-            debug!("Detected main.rs special case");
-            self.handle_main_rs_special_case(base_path)?;
-        } else {
-            // Standard file splitting logic
-            let items = self.content().items();
-            let grouped_items = self.group_items_by_target_file(items);
-
-            debug!("Found {} item groups", grouped_items.len());
-
-            self.process_and_write_grouped_items(base_path)?;
-
-            // Update mod.rs if multiple files were created
-            if grouped_items.len() > 1 {
-                debug!("Multiple files created, updating mod.rs");
-                self.update_mod_file(base_path, &grouped_items)?;
-            } else {
-                debug!("Only one file, skipping mod.rs update");
-            }
-        }
+        self.handle_file_writing_strategy(base_path)?;
 
         Ok(())
     }
@@ -107,6 +84,41 @@ impl RustFileContent {
     const MOD_PREFIX: &'static str = "mod ";
     const COMMENT_PREFIX: &'static str = "///";
     const PRELUDE_IMPORT: &'static str = "use crate::prelude::*;\n\n";
+
+    /// Determines and executes the appropriate file writing strategy
+    fn handle_file_writing_strategy(&self, base_path: &Path) -> Result<()> {
+        // Check if this is a special lib.rs case
+        if self.is_lib_rs_special_case() {
+            debug!("Detected lib.rs special case");
+            self.handle_lib_rs_special_case(base_path)?;
+        } else if self.is_main_rs_special_case() {
+            debug!("Detected main.rs special case");
+            self.handle_main_rs_special_case(base_path)?;
+        } else {
+            self.handle_standard_file_splitting(base_path)?;
+        }
+        Ok(())
+    }
+
+    /// Handles standard file splitting logic for regular files
+    fn handle_standard_file_splitting(&self, base_path: &Path) -> Result<()> {
+        // Standard file splitting logic
+        let items = self.content().items();
+        let grouped_items = self.group_items_by_target_file(items);
+
+        debug!("Found {} item groups", grouped_items.len());
+
+        self.process_and_write_grouped_items(base_path)?;
+
+        // Update mod.rs if multiple files were created
+        if grouped_items.len() > 1 {
+            debug!("Multiple files created, updating mod.rs");
+            self.update_mod_file(base_path, &grouped_items)?;
+        } else {
+            debug!("Only one file, skipping mod.rs update");
+        }
+        Ok(())
+    }
 
     /// Creates the output directory if it doesn't exist
     fn ensure_output_directory_exists(&self, base_path: &Path) -> Result<()> {
@@ -752,23 +764,8 @@ impl RustFileContent {
         let items = self.content().items();
         let (type_items, logic_items, other_items) = self.categorize_lib_rs_items(items);
 
-        // Create types folder and files if there are type items
-        if !type_items.is_empty() {
-            let types_dir = base_path.join(Self::FOLDER_TYPES);
-            std::fs::create_dir_all(&types_dir)
-                .map_err(|e| Error::bail(format!("Failed to create types directory: {}", e)))?;
-            self.write_organized_items(&type_items, &types_dir, Self::CATEGORY_TYPES)?;
-            self.create_types_mod_rs(&types_dir, &type_items)?;
-        }
-
-        // Create logic folder and files if there are function items
-        if !logic_items.is_empty() {
-            let logic_dir = base_path.join(Self::FOLDER_LOGIC);
-            std::fs::create_dir_all(&logic_dir)
-                .map_err(|e| Error::bail(format!("Failed to create logic directory: {}", e)))?;
-            self.write_organized_items(&logic_items, &logic_dir, Self::CATEGORY_LOGIC)?;
-            self.create_logic_mod_rs(&logic_dir, &logic_items)?;
-        }
+        self.create_types_folder_if_needed(&type_items, base_path)?;
+        self.create_logic_folder_if_needed(&logic_items, base_path)?;
 
         // Create the new lib.rs with prelude module
         self.create_lib_rs_with_prelude(
@@ -778,6 +775,38 @@ impl RustFileContent {
             &other_items,
         )?;
 
+        Ok(())
+    }
+
+    /// Creates types folder and files if there are type items
+    fn create_types_folder_if_needed(
+        &self,
+        type_items: &[SourceItem],
+        base_path: &Path,
+    ) -> Result<()> {
+        if !type_items.is_empty() {
+            let types_dir = base_path.join(Self::FOLDER_TYPES);
+            std::fs::create_dir_all(&types_dir)
+                .map_err(|e| Error::bail(format!("Failed to create types directory: {}", e)))?;
+            self.write_organized_items(type_items, &types_dir, Self::CATEGORY_TYPES)?;
+            self.create_types_mod_rs(&types_dir, type_items)?;
+        }
+        Ok(())
+    }
+
+    /// Creates logic folder and files if there are function items
+    fn create_logic_folder_if_needed(
+        &self,
+        logic_items: &[SourceItem],
+        base_path: &Path,
+    ) -> Result<()> {
+        if !logic_items.is_empty() {
+            let logic_dir = base_path.join(Self::FOLDER_LOGIC);
+            std::fs::create_dir_all(&logic_dir)
+                .map_err(|e| Error::bail(format!("Failed to create logic directory: {}", e)))?;
+            self.write_organized_items(logic_items, &logic_dir, Self::CATEGORY_LOGIC)?;
+            self.create_logic_mod_rs(&logic_dir, logic_items)?;
+        }
         Ok(())
     }
 
@@ -846,22 +875,8 @@ impl RustFileContent {
         let items = self.content().items();
         let (type_items, function_items, main_items) = self.categorize_main_rs_items_simple(items);
 
-        // Write type items to individual files (similar to standard behavior)
-        if !type_items.is_empty() {
-            let grouped_items = self.group_items_by_target_file(&type_items);
-            for (file_name, group_items) in grouped_items {
-                let target_file = base_path.join(&file_name);
-                let content = self.build_organized_file_content(&group_items, Self::CATEGORY_MAIN);
-                self.write_content_to_file(&content, &target_file)?;
-            }
-        }
-
-        // Write functions to utils.rs (or similar)
-        if !function_items.is_empty() {
-            let target_file = base_path.join(Self::UTILS_RS);
-            let content = self.build_organized_file_content(&function_items, Self::CATEGORY_MAIN);
-            self.write_content_to_file(&content, &target_file)?;
-        }
+        self.write_main_rs_type_items(&type_items, base_path)?;
+        self.write_main_rs_function_items(&function_items, base_path)?;
 
         // Create the new main.rs with module declarations and main function
         self.create_simple_main_rs(
@@ -871,11 +886,48 @@ impl RustFileContent {
             &main_items,
         )?;
 
-        // Create mod.rs if we have multiple files
-        if !type_items.is_empty() || !function_items.is_empty() {
-            self.create_main_mod_rs(base_path, &type_items, !function_items.is_empty())?;
-        }
+        self.create_main_mod_rs_if_needed(&type_items, !function_items.is_empty(), base_path)?;
 
+        Ok(())
+    }
+
+    /// Writes type items to individual files for main.rs special case
+    fn write_main_rs_type_items(&self, type_items: &[SourceItem], base_path: &Path) -> Result<()> {
+        if !type_items.is_empty() {
+            let grouped_items = self.group_items_by_target_file(type_items);
+            for (file_name, group_items) in grouped_items {
+                let target_file = base_path.join(&file_name);
+                let content = self.build_organized_file_content(&group_items, Self::CATEGORY_MAIN);
+                self.write_content_to_file(&content, &target_file)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Writes function items to utils.rs for main.rs special case
+    fn write_main_rs_function_items(
+        &self,
+        function_items: &[SourceItem],
+        base_path: &Path,
+    ) -> Result<()> {
+        if !function_items.is_empty() {
+            let target_file = base_path.join(Self::UTILS_RS);
+            let content = self.build_organized_file_content(function_items, Self::CATEGORY_MAIN);
+            self.write_content_to_file(&content, &target_file)?;
+        }
+        Ok(())
+    }
+
+    /// Creates mod.rs if needed for main.rs special case
+    fn create_main_mod_rs_if_needed(
+        &self,
+        type_items: &[SourceItem],
+        has_functions: bool,
+        base_path: &Path,
+    ) -> Result<()> {
+        if !type_items.is_empty() || has_functions {
+            self.create_main_mod_rs(base_path, type_items, has_functions)?;
+        }
         Ok(())
     }
 
@@ -888,52 +940,102 @@ impl RustFileContent {
     ) -> Result<()> {
         match category {
             Self::CATEGORY_LOGIC => {
-                // For logic items (functions), group them all into functions.rs
-                let target_file = dir.join(Self::FUNCTIONS_RS);
-                let content = self.build_organized_file_content(items, category);
-                self.write_content_to_file(&content, &target_file)?;
+                self.write_logic_items(items, dir, category)?;
             }
             Self::CATEGORY_CLI | Self::CATEGORY_CORE => {
-                // For CLI and core items, separate types and functions
-                let mut type_items = Vec::new();
-                let mut function_items = Vec::new();
-
-                for item in items {
-                    if self.is_type_item(item) {
-                        type_items.push(item.clone());
-                    } else if matches!(item, SourceItem::Function(_)) {
-                        function_items.push(item.clone());
-                    }
-                }
-
-                // Write types to individual files
-                if !type_items.is_empty() {
-                    let grouped_items = self.group_items_by_target_file(&type_items);
-                    for (file_name, group_items) in grouped_items {
-                        let target_file = dir.join(&file_name);
-                        let content = self.build_organized_file_content(&group_items, category);
-                        self.write_content_to_file(&content, &target_file)?;
-                    }
-                }
-
-                // Write functions to functions.rs
-                if !function_items.is_empty() {
-                    let target_file = dir.join(Self::FUNCTIONS_RS);
-                    let content = self.build_organized_file_content(&function_items, category);
-                    self.write_content_to_file(&content, &target_file)?;
-                }
+                self.write_cli_core_items(items, dir, category)?;
             }
             _ => {
-                // For other categories (like "types"), use the standard grouping
-                let grouped_items = self.group_items_by_target_file(items);
-                for (file_name, group_items) in grouped_items {
-                    let target_file = dir.join(&file_name);
-                    let content = self.build_organized_file_content(&group_items, category);
-                    self.write_content_to_file(&content, &target_file)?;
-                }
+                self.write_standard_grouped_items(items, dir, category)?;
             }
         }
 
+        Ok(())
+    }
+
+    /// Writes logic items (functions) to functions.rs
+    fn write_logic_items(&self, items: &[SourceItem], dir: &Path, category: &str) -> Result<()> {
+        let target_file = dir.join(Self::FUNCTIONS_RS);
+        let content = self.build_organized_file_content(items, category);
+        self.write_content_to_file(&content, &target_file)?;
+        Ok(())
+    }
+
+    /// Writes CLI and core items, separating types and functions
+    fn write_cli_core_items(&self, items: &[SourceItem], dir: &Path, category: &str) -> Result<()> {
+        let (type_items, function_items) = self.separate_types_and_functions(items);
+
+        self.write_separated_type_items(&type_items, dir, category)?;
+        self.write_separated_function_items(&function_items, dir, category)?;
+
+        Ok(())
+    }
+
+    /// Separates items into types and functions
+    fn separate_types_and_functions(
+        &self,
+        items: &[SourceItem],
+    ) -> (Vec<SourceItem>, Vec<SourceItem>) {
+        let mut type_items = Vec::new();
+        let mut function_items = Vec::new();
+
+        for item in items {
+            if self.is_type_item(item) {
+                type_items.push(item.clone());
+            } else if matches!(item, SourceItem::Function(_)) {
+                function_items.push(item.clone());
+            }
+        }
+
+        (type_items, function_items)
+    }
+
+    /// Writes separated type items to individual files
+    fn write_separated_type_items(
+        &self,
+        type_items: &[SourceItem],
+        dir: &Path,
+        category: &str,
+    ) -> Result<()> {
+        if !type_items.is_empty() {
+            let grouped_items = self.group_items_by_target_file(type_items);
+            for (file_name, group_items) in grouped_items {
+                let target_file = dir.join(&file_name);
+                let content = self.build_organized_file_content(&group_items, category);
+                self.write_content_to_file(&content, &target_file)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Writes separated function items to functions.rs
+    fn write_separated_function_items(
+        &self,
+        function_items: &[SourceItem],
+        dir: &Path,
+        category: &str,
+    ) -> Result<()> {
+        if !function_items.is_empty() {
+            let target_file = dir.join(Self::FUNCTIONS_RS);
+            let content = self.build_organized_file_content(function_items, category);
+            self.write_content_to_file(&content, &target_file)?;
+        }
+        Ok(())
+    }
+
+    /// Writes items using standard grouping
+    fn write_standard_grouped_items(
+        &self,
+        items: &[SourceItem],
+        dir: &Path,
+        category: &str,
+    ) -> Result<()> {
+        let grouped_items = self.group_items_by_target_file(items);
+        for (file_name, group_items) in grouped_items {
+            let target_file = dir.join(&file_name);
+            let content = self.build_organized_file_content(&group_items, category);
+            self.write_content_to_file(&content, &target_file)?;
+        }
         Ok(())
     }
 
@@ -996,23 +1098,49 @@ impl RustFileContent {
         has_logic: bool,
         other_items: &[SourceItem],
     ) -> Result<()> {
-        let lib_rs_path = if base_path.is_dir() {
+        let lib_rs_path = self.determine_lib_rs_path(base_path);
+        let content = self.build_lib_rs_content(has_types, has_logic, other_items);
+        self.write_content_to_file(&content, &lib_rs_path)?;
+        Ok(())
+    }
+
+    /// Determines the path for the lib.rs file
+    fn determine_lib_rs_path(&self, base_path: &Path) -> PathBuf {
+        if base_path.is_dir() {
             base_path.join("lib.rs")
         } else {
             base_path.to_path_buf()
-        };
+        }
+    }
 
+    /// Builds the content for lib.rs file
+    fn build_lib_rs_content(
+        &self,
+        has_types: bool,
+        has_logic: bool,
+        other_items: &[SourceItem],
+    ) -> String {
         let mut content = String::new();
 
-        // Add module declarations
+        self.add_module_declarations(&mut content, has_logic, has_types);
+        self.add_remaining_items(&mut content, other_items);
+        self.add_prelude_module(&mut content, has_logic, has_types, other_items);
+
+        content
+    }
+
+    /// Adds module declarations to lib.rs content
+    fn add_module_declarations(&self, content: &mut String, has_logic: bool, has_types: bool) {
         if has_logic {
             content.push_str("mod logic;\n");
         }
         if has_types {
             content.push_str("mod types;\n");
         }
+    }
 
-        // Add any remaining items (like use statements)
+    /// Adds remaining items (like use statements) to lib.rs content
+    fn add_remaining_items(&self, content: &mut String, other_items: &[SourceItem]) {
         if !other_items.is_empty() {
             content.push('\n');
             for (i, item) in other_items.iter().enumerate() {
@@ -1024,9 +1152,18 @@ impl RustFileContent {
                 content.push('\n');
             }
         }
+    }
 
-        // Add prelude module
+    /// Adds prelude module to lib.rs content
+    fn add_prelude_module(
+        &self,
+        content: &mut String,
+        has_logic: bool,
+        has_types: bool,
+        other_items: &[SourceItem],
+    ) {
         content.push_str("\npub mod prelude {\n");
+
         if has_logic {
             content.push_str("    pub use crate::logic::*;\n");
         }
@@ -1034,7 +1171,6 @@ impl RustFileContent {
             content.push_str("    pub use crate::types::*;\n");
         }
 
-        // Add common external crates if we detect this is a fresh lib.rs
         if self.should_add_common_imports(other_items) {
             content.push('\n');
             content.push_str("    pub use std::{\n");
@@ -1044,9 +1180,6 @@ impl RustFileContent {
         }
 
         content.push_str("}\n");
-
-        self.write_content_to_file(&content, &lib_rs_path)?;
-        Ok(())
     }
 
     /// Checks if we should add common imports (when there are minimal existing imports)

@@ -18,6 +18,12 @@ fn color_from_level(level: Level) -> ColoredString {
 /// # Panics
 /// Panics if `log_level` is not a valid log level.
 pub(crate) fn init_logging_with_level(log_level: log::LevelFilter) {
+    configure_fern_dispatcher(log_level);
+    log_initialization_message(log_level);
+}
+
+/// Configures and applies the Fern dispatcher for logging
+fn configure_fern_dispatcher(log_level: log::LevelFilter) {
     fern::Dispatch::new()
         .format(|out, message, record| {
             let time = Local::now().format("%H:%M:%S%.3f");
@@ -29,7 +35,10 @@ pub(crate) fn init_logging_with_level(log_level: log::LevelFilter) {
         .apply()
         .inspect_err(|e| println!("💥 Failed to initialize logging with level `{log_level}`: {e}"))
         .unwrap();
+}
 
+/// Logs the initialization message if logging level is set
+fn log_initialization_message(log_level: log::LevelFilter) {
     if let Some(log_level) = log_level.to_level() {
         debug!(
             "🪵 Logging initialized with level: {log_level} (if you see this message once, logging is not properly setup)"
