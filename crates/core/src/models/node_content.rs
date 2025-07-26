@@ -40,26 +40,26 @@ impl FileWritable for RustFileContent {
 
         // Check if this is a special lib.rs case
         if self.is_lib_rs_special_case() {
-            println!("DEBUG: Detected lib.rs special case");
+            debug!("Detected lib.rs special case");
             self.handle_lib_rs_special_case(base_path)?;
         } else if self.is_main_rs_special_case() {
-            println!("DEBUG: Detected main.rs special case");
+            debug!("Detected main.rs special case");
             self.handle_main_rs_special_case(base_path)?;
         } else {
             // Standard file splitting logic
             let items = self.content().items();
             let grouped_items = self.group_items_by_target_file(items);
 
-            println!("DEBUG: Found {} item groups", grouped_items.len());
+            debug!("Found {} item groups", grouped_items.len());
 
             self.process_and_write_grouped_items(base_path)?;
 
             // Update mod.rs if multiple files were created
             if grouped_items.len() > 1 {
-                println!("DEBUG: Multiple files created, updating mod.rs");
+                debug!("Multiple files created, updating mod.rs");
                 self.update_mod_file(base_path, &grouped_items)?;
             } else {
-                println!("DEBUG: Only one file, skipping mod.rs update");
+                debug!("Only one file, skipping mod.rs update");
             }
         }
 
