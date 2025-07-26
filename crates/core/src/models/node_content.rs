@@ -42,6 +42,9 @@ impl FileWritable for RustFileContent {
         if self.is_lib_rs_special_case() {
             println!("DEBUG: Detected lib.rs special case");
             self.handle_lib_rs_special_case(base_path)?;
+        } else if self.is_main_rs_special_case() {
+            println!("DEBUG: Detected main.rs special case");
+            self.handle_main_rs_special_case(base_path)?;
         } else {
             // Standard file splitting logic
             let items = self.content().items();
@@ -682,6 +685,12 @@ impl RustFileContent {
         file_name == "lib.rs" && self.has_multiple_types_or_functions()
     }
 
+    /// Checks if this is a main.rs file that should receive special treatment
+    fn is_main_rs_special_case(&self) -> bool {
+        let file_name = self.content().name();
+        file_name == "main.rs" && self.has_multiple_types_or_functions_for_main()
+    }
+
     /// Checks if the file has multiple types or functions that warrant special organization
     fn has_multiple_types_or_functions(&self) -> bool {
         let items = self.content().items();
@@ -692,6 +701,19 @@ impl RustFileContent {
             .count();
 
         type_count > 0 || function_count > 0
+    }
+
+    /// Checks if the main.rs file has types or functions that warrant special organization
+    /// For main.rs, we want to organize if there are types or non-main functions
+    fn has_multiple_types_or_functions_for_main(&self) -> bool {
+        let items = self.content().items();
+        let type_count = items.iter().filter(|item| self.is_type_item(item)).count();
+        let non_main_function_count = items
+            .iter()
+            .filter(|item| matches!(item, SourceItem::Function(f) if f.sig.ident != "main"))
+            .count();
+
+        type_count > 0 || non_main_function_count > 0
     }
 
     /// Handles the special lib.rs case by organizing into types and logic folders
@@ -748,6 +770,33 @@ impl RustFileContent {
         (type_items, logic_items, other_items)
     }
 
+    /// Categorizes items into types, functions, and main function items (simple approach)
+    fn categorize_main_rs_items_simple(
+        &self,
+        items: &[SourceItem],
+    ) -> (Vec<SourceItem>, Vec<SourceItem>, Vec<SourceItem>) {
+        let mut type_items = Vec::new();
+        let mut function_items = Vec::new();
+        let mut main_items = Vec::new();
+
+        for item in items {
+            match item {
+                SourceItem::Function(f) if f.sig.ident == "main" => {
+                    main_items.push(item.clone());
+                }
+                SourceItem::Function(_) => {
+                    function_items.push(item.clone());
+                }
+                _ if self.is_type_item(item) => {
+                    type_items.push(item.clone());
+                }
+                _ => main_items.push(item.clone()),
+            }
+        }
+
+        (type_items, function_items, main_items)
+    }
+
     /// Checks if an item is a type (struct, enum, trait, type alias, union, impl)
     fn is_type_item(&self, item: &SourceItem) -> bool {
         matches!(
@@ -761,6 +810,44 @@ impl RustFileContent {
         )
     }
 
+    /// Handles the special main.rs case by organizing into simple flat structure
+    fn handle_main_rs_special_case(&self, base_path: &Path) -> Result<()> {
+        let items = self.content().items();
+        let (type_items, function_items, main_items) = self.categorize_main_rs_items_simple(items);
+
+        // Write type items to individual files (similar to standard behavior)
+        if !type_items.is_empty() {
+            let grouped_items = self.group_items_by_target_file(&type_items);
+            for (file_name, group_items) in grouped_items {
+                let target_file = base_path.join(&file_name);
+                let content = self.build_organized_file_content(&group_items, "main");
+                self.write_content_to_file(&content, &target_file)?;
+            }
+        }
+
+        // Write functions to utils.rs (or similar)
+        if !function_items.is_empty() {
+            let target_file = base_path.join("utils.rs");
+            let content = self.build_organized_file_content(&function_items, "main");
+            self.write_content_to_file(&content, &target_file)?;
+        }
+
+        // Create the new main.rs with module declarations and main function
+        self.create_simple_main_rs(
+            base_path,
+            !type_items.is_empty(),
+            !function_items.is_empty(),
+            &main_items,
+        )?;
+
+        // Create mod.rs if we have multiple files
+        if !type_items.is_empty() || !function_items.is_empty() {
+            self.create_main_mod_rs(base_path, &type_items, !function_items.is_empty())?;
+        }
+
+        Ok(())
+    }
+
     /// Writes organized items to separate files in the given directory
     fn write_organized_items(
         &self,
@@ -768,19 +855,51 @@ impl RustFileContent {
         dir: &Path,
         category: &str,
     ) -> Result<()> {
-        if category == "logic" {
-            // For logic items (functions), group them all into functions.rs
-            let target_file = dir.join("functions.rs");
-            let content = self.build_organized_file_content(items, category);
-            self.write_content_to_file(&content, &target_file)?;
-        } else {
-            // For type items, use the standard grouping
-            let grouped_items = self.group_items_by_target_file(items);
-
-            for (file_name, group_items) in grouped_items {
-                let target_file = dir.join(&file_name);
-                let content = self.build_organized_file_content(&group_items, category);
+        match category {
+            "logic" => {
+                // For logic items (functions), group them all into functions.rs
+                let target_file = dir.join("functions.rs");
+                let content = self.build_organized_file_content(items, category);
                 self.write_content_to_file(&content, &target_file)?;
+            }
+            "cli" | "core" => {
+                // For CLI and core items, separate types and functions
+                let mut type_items = Vec::new();
+                let mut function_items = Vec::new();
+
+                for item in items {
+                    if self.is_type_item(item) {
+                        type_items.push(item.clone());
+                    } else if matches!(item, SourceItem::Function(_)) {
+                        function_items.push(item.clone());
+                    }
+                }
+
+                // Write types to individual files
+                if !type_items.is_empty() {
+                    let grouped_items = self.group_items_by_target_file(&type_items);
+                    for (file_name, group_items) in grouped_items {
+                        let target_file = dir.join(&file_name);
+                        let content = self.build_organized_file_content(&group_items, category);
+                        self.write_content_to_file(&content, &target_file)?;
+                    }
+                }
+
+                // Write functions to functions.rs
+                if !function_items.is_empty() {
+                    let target_file = dir.join("functions.rs");
+                    let content = self.build_organized_file_content(&function_items, category);
+                    self.write_content_to_file(&content, &target_file)?;
+                }
+            }
+            _ => {
+                // For other categories (like "types"), use the standard grouping
+                let grouped_items = self.group_items_by_target_file(items);
+                for (file_name, group_items) in grouped_items {
+                    let target_file = dir.join(&file_name);
+                    let content = self.build_organized_file_content(&group_items, category);
+                    self.write_content_to_file(&content, &target_file)?;
+                }
             }
         }
 
@@ -907,6 +1026,79 @@ impl RustFileContent {
             .filter(|item| matches!(item, SourceItem::Use(_)))
             .count();
         use_count <= 2 // Only if there are 2 or fewer existing use statements
+    }
+
+    /// Creates a simple main.rs file with module declarations and main function
+    fn create_simple_main_rs(
+        &self,
+        base_path: &Path,
+        _has_types: bool,
+        has_functions: bool,
+        main_items: &[SourceItem],
+    ) -> Result<()> {
+        let main_rs_path = if base_path.is_dir() {
+            base_path.join("main.rs")
+        } else {
+            base_path.to_path_buf()
+        };
+
+        let mut content = String::new();
+
+        // Don't create modules for types, just use individual files directly
+        // Only add utils module if we have functions
+        if has_functions {
+            content.push_str("mod utils;\n");
+            content.push('\n');
+            content.push_str("use utils::*;\n");
+        }
+
+        // Add any remaining items (like use statements, main function)
+        if !main_items.is_empty() {
+            if has_functions {
+                content.push('\n');
+            }
+            for (i, item) in main_items.iter().enumerate() {
+                if i > 0 {
+                    let spacing = self.determine_item_spacing(&main_items[i - 1], item);
+                    content.push_str(&spacing);
+                }
+                content.push_str(&self.source_item_to_string(item));
+                content.push('\n');
+            }
+        }
+
+        self.write_content_to_file(&content, &main_rs_path)?;
+        Ok(())
+    }
+
+    /// Creates mod.rs for main.rs special case
+    fn create_main_mod_rs(
+        &self,
+        base_path: &Path,
+        type_items: &[SourceItem],
+        has_functions: bool,
+    ) -> Result<()> {
+        let mut module_names = Vec::new();
+
+        // Add module for individual type files
+        if !type_items.is_empty() {
+            let grouped_items = self.group_items_by_target_file(type_items);
+            let type_module_names = self.extract_module_names_for_organized_items(&grouped_items);
+            module_names.extend(type_module_names);
+        }
+
+        // Add utils module if there are functions
+        if has_functions {
+            module_names.push("utils".to_string());
+        }
+
+        if !module_names.is_empty() {
+            module_names.sort();
+            let mod_rs_path = base_path.join("mod.rs");
+            self.write_mod_file_content(&mod_rs_path, module_names)?;
+        }
+
+        Ok(())
     }
 }
 

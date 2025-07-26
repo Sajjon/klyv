@@ -1,0 +1,29 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Configuration for the CLI application
+#[derive(Debug, Clone)]
+pub struct CliConfig {
+    pub verbose: bool,
+    pub output_path: PathBuf,
+    pub input_files: Vec<PathBuf>,
+}
+
+
+
+impl CliConfig {
+    pub fn new() -> Self {
+        Self {
+            verbose: false,
+            output_path: PathBuf::from("."),
+            input_files: Vec::new(),
+        }
+    }
+    pub fn with_verbose(mut self, verbose: bool) -> Self {
+        self.verbose = verbose;
+        self
+    }
+}

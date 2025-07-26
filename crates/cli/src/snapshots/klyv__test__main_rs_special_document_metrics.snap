@@ -1,0 +1,13 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Metrics for documents
+#[derive(Debug)]
+pub struct DocumentMetrics {
+    pub total_count: usize,
+    pub total_length: usize,
+    pub average_length: f64,
+}

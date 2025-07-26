@@ -195,3 +195,64 @@ fn collect_files_content_recursive(
         }
     }
 }
+
+#[test]
+fn test_main_rs_special_case_handling() {
+    let mut source_path = env::current_dir().unwrap();
+    source_path.push("src/fixtures/main_rs_special/main.rs");
+
+    // Use a temporary directory that will be cleaned up automatically
+    let temp_dir = TempDir::new().unwrap();
+    let out_path = temp_dir.path().to_path_buf();
+
+    let input = Input::builder()
+        .source(source_path.to_path_buf())
+        .maybe_out(Some(out_path.clone()))
+        .build();
+
+    let result = run(input);
+    assert!(result.is_ok(), "Running klyv on main.rs should succeed");
+
+    // Verify the expected file structure was created
+    let main_rs_path = out_path.join("main.rs");
+    let utils_rs_path = out_path.join("utils.rs");
+    let mod_rs_path = out_path.join("mod.rs");
+
+    assert!(main_rs_path.exists(), "main.rs should exist");
+    assert!(utils_rs_path.exists(), "utils.rs should exist");
+    assert!(mod_rs_path.exists(), "mod.rs should exist");
+
+    // Individual snapshot tests for each generated file
+    assert_generated_file_snapshot(&out_path, "main.rs", "main_rs_special_main");
+    assert_generated_file_snapshot(&out_path, "utils.rs", "main_rs_special_utils");
+    assert_generated_file_snapshot(&out_path, "mod.rs", "main_rs_special_mod");
+
+    // Check for individual type files
+    assert_generated_file_snapshot(&out_path, "cli_config.rs", "main_rs_special_cli_config");
+    assert_generated_file_snapshot(
+        &out_path,
+        "argument_parser.rs",
+        "main_rs_special_argument_parser",
+    );
+    assert_generated_file_snapshot(&out_path, "document.rs", "main_rs_special_document");
+    assert_generated_file_snapshot(
+        &out_path,
+        "file_processor.rs",
+        "main_rs_special_file_processor",
+    );
+    assert_generated_file_snapshot(
+        &out_path,
+        "processing_error.rs",
+        "main_rs_special_processing_error",
+    );
+    assert_generated_file_snapshot(
+        &out_path,
+        "document_metadata.rs",
+        "main_rs_special_document_metadata",
+    );
+    assert_generated_file_snapshot(
+        &out_path,
+        "document_metrics.rs",
+        "main_rs_special_document_metrics",
+    );
+}

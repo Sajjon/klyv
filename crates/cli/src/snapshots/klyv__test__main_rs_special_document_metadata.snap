@@ -1,0 +1,12 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+#[derive(Debug, Clone, Default)]
+pub struct DocumentMetadata {
+    pub created_at: Option<String>,
+    pub author: Option<String>,
+    pub tags: Vec<String>,
+}

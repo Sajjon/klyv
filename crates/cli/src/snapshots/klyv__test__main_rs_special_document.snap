@@ -1,0 +1,25 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Core data structures
+#[derive(Debug, Clone)]
+pub struct Document {
+    pub title: String,
+    pub content: String,
+    pub metadata: DocumentMetadata,
+}
+
+
+
+impl Document {
+    pub fn new(title: String, content: String) -> Self {
+        Self {
+            title,
+            content,
+            metadata: DocumentMetadata::default(),
+        }
+    }
+}

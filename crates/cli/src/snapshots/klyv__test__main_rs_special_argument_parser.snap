@@ -1,0 +1,25 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Command line argument parser
+#[derive(Debug)]
+pub struct ArgumentParser {
+    args: Vec<String>,
+}
+
+
+
+impl ArgumentParser {
+    pub fn new() -> Self {
+        Self {
+            args: env::args().collect(),
+        }
+    }
+    pub fn parse(&self) -> Result<CliConfig, String> {
+        let mut config = CliConfig::new();
+        Ok(config)
+    }
+}

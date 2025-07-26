@@ -1,0 +1,46 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+mod utils;
+
+use utils::*;
+
+use std::collections::HashMap;
+
+
+use std::env;
+
+
+use std::path::PathBuf;
+
+
+
+fn main() {
+    let parser = ArgumentParser::new();
+    let config = match parser.parse() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Error parsing arguments: {}", e);
+            display_help();
+            std::process::exit(1);
+        }
+    };
+    if config.verbose {
+        println!("Verbose mode enabled");
+    }
+    let mut processor = FileProcessor::new();
+    for file in &config.input_files {
+        match processor.process_file(file) {
+            Ok(result) => {
+                if config.verbose {
+                    println!("{}", result);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error processing {}: {}", file.display(), e);
+            }
+        }
+    }
+    println!("Processing complete. Cache size: {}", processor.get_cache_size());
+}
