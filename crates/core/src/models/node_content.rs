@@ -80,6 +80,34 @@ struct DocContent {
 }
 
 impl RustFileContent {
+    // Constants for file names and extensions
+    const MAIN_RS: &'static str = "main.rs";
+    const LIB_RS: &'static str = "lib.rs";
+    const MOD_RS: &'static str = "mod.rs";
+    const UTILS_RS: &'static str = "utils.rs";
+    const FUNCTIONS_RS: &'static str = "functions.rs";
+    const RS_EXTENSION: &'static str = ".rs";
+
+    // Constants for categories
+    const CATEGORY_MAIN: &'static str = "main";
+    const CATEGORY_LOGIC: &'static str = "logic";
+    const CATEGORY_TYPES: &'static str = "types";
+    const CATEGORY_CLI: &'static str = "cli";
+    const CATEGORY_CORE: &'static str = "core";
+
+    // Constants for folder names
+    const FOLDER_TYPES: &'static str = "types";
+    const FOLDER_LOGIC: &'static str = "logic";
+
+    // Constants for module names
+    const MAIN_FUNCTION: &'static str = "main";
+
+    // Constants for common patterns
+    const DOC_ATTR_PREFIX: &'static str = "[doc = \"";
+    const MOD_PREFIX: &'static str = "mod ";
+    const COMMENT_PREFIX: &'static str = "///";
+    const PRELUDE_IMPORT: &'static str = "use crate::prelude::*;\n\n";
+
     /// Creates the output directory if it doesn't exist
     fn ensure_output_directory_exists(&self, base_path: &Path) -> Result<()> {
         if let Some(parent) = base_path.parent() {
@@ -176,7 +204,7 @@ impl RustFileContent {
     ) {
         for item in items {
             if let Some(type_name) = self.extract_type_name_from_item(item) {
-                let file_name = format!("{}.rs", self.to_snake_case(&type_name));
+                let file_name = format!("{}{}", self.to_snake_case(&type_name), Self::RS_EXTENSION);
                 self.add_item_to_group(groups, file_name, use_statements, item);
             } else if self.is_non_type_item(item) {
                 // Functions, macros, etc. go to the original file
@@ -269,7 +297,7 @@ impl RustFileContent {
             let target_type = self.extract_impl_target_type(impl_block);
 
             if let Some(type_name) = target_type {
-                let file_name = format!("{}.rs", self.to_snake_case(&type_name));
+                let file_name = format!("{}{}", self.to_snake_case(&type_name), Self::RS_EXTENSION);
                 self.try_add_impl_to_type_file(groups, &file_name, impl_item);
             } else {
                 // Can't determine target type, put in original file
@@ -497,7 +525,7 @@ impl RustFileContent {
     /// Attempts to parse a doc attribute and create a DocConversion
     fn try_parse_doc_attribute(&self, chars: &[char], pos: usize) -> Option<DocConversion> {
         if let Some(doc_content) = self.extract_doc_attribute_content(chars, pos) {
-            let converted_text = format!("///{}", doc_content.content);
+            let converted_text = format!("{}{}", Self::COMMENT_PREFIX, doc_content.content);
             Some(DocConversion {
                 converted_text,
                 next_position: doc_content.end_position,
@@ -525,7 +553,7 @@ impl RustFileContent {
         let slice: String = chars[pos..std::cmp::min(pos + 8, chars.len())]
             .iter()
             .collect();
-        if !slice.starts_with("[doc = \"") {
+        if !slice.starts_with(Self::DOC_ATTR_PREFIX) {
             return None;
         }
 
@@ -586,9 +614,12 @@ impl RustFileContent {
         grouped_items: &HashMap<String, Vec<SourceItem>>,
     ) -> Result<()> {
         let mod_file_path = if base_path.is_dir() {
-            base_path.join("mod.rs")
+            base_path.join(Self::MOD_RS)
         } else {
-            base_path.parent().unwrap_or(Path::new(".")).join("mod.rs")
+            base_path
+                .parent()
+                .unwrap_or(Path::new("."))
+                .join(Self::MOD_RS)
         };
 
         let module_names = self.extract_module_names_from_groups(grouped_items);
@@ -607,7 +638,7 @@ impl RustFileContent {
         grouped_items
             .keys()
             .filter(|&name| name != self.content().name())
-            .map(|name| name.trim_end_matches(".rs").to_string())
+            .map(|name| name.trim_end_matches(Self::RS_EXTENSION).to_string())
             .collect()
     }
 
@@ -633,7 +664,7 @@ impl RustFileContent {
             .lines()
             .filter_map(|line| {
                 let trimmed = line.trim();
-                if trimmed.starts_with("mod ") && trimmed.ends_with(';') {
+                if trimmed.starts_with(Self::MOD_PREFIX) && trimmed.ends_with(';') {
                     Some(trimmed[4..trimmed.len() - 1].to_string())
                 } else {
                     None
@@ -682,13 +713,13 @@ impl RustFileContent {
     /// Checks if this is a lib.rs file that should receive special treatment
     fn is_lib_rs_special_case(&self) -> bool {
         let file_name = self.content().name();
-        file_name == "lib.rs" && self.has_multiple_types_or_functions()
+        file_name == Self::LIB_RS && self.has_multiple_types_or_functions()
     }
 
     /// Checks if this is a main.rs file that should receive special treatment
     fn is_main_rs_special_case(&self) -> bool {
         let file_name = self.content().name();
-        file_name == "main.rs" && self.has_multiple_types_or_functions_for_main()
+        file_name == Self::MAIN_RS && self.has_multiple_types_or_functions_for_main()
     }
 
     /// Checks if the file has multiple types or functions that warrant special organization
@@ -723,19 +754,19 @@ impl RustFileContent {
 
         // Create types folder and files if there are type items
         if !type_items.is_empty() {
-            let types_dir = base_path.join("types");
+            let types_dir = base_path.join(Self::FOLDER_TYPES);
             std::fs::create_dir_all(&types_dir)
                 .map_err(|e| Error::bail(format!("Failed to create types directory: {}", e)))?;
-            self.write_organized_items(&type_items, &types_dir, "types")?;
+            self.write_organized_items(&type_items, &types_dir, Self::CATEGORY_TYPES)?;
             self.create_types_mod_rs(&types_dir, &type_items)?;
         }
 
         // Create logic folder and files if there are function items
         if !logic_items.is_empty() {
-            let logic_dir = base_path.join("logic");
+            let logic_dir = base_path.join(Self::FOLDER_LOGIC);
             std::fs::create_dir_all(&logic_dir)
                 .map_err(|e| Error::bail(format!("Failed to create logic directory: {}", e)))?;
-            self.write_organized_items(&logic_items, &logic_dir, "logic")?;
+            self.write_organized_items(&logic_items, &logic_dir, Self::CATEGORY_LOGIC)?;
             self.create_logic_mod_rs(&logic_dir, &logic_items)?;
         }
 
@@ -781,7 +812,7 @@ impl RustFileContent {
 
         for item in items {
             match item {
-                SourceItem::Function(f) if f.sig.ident == "main" => {
+                SourceItem::Function(f) if f.sig.ident == Self::MAIN_FUNCTION => {
                     main_items.push(item.clone());
                 }
                 SourceItem::Function(_) => {
@@ -820,15 +851,15 @@ impl RustFileContent {
             let grouped_items = self.group_items_by_target_file(&type_items);
             for (file_name, group_items) in grouped_items {
                 let target_file = base_path.join(&file_name);
-                let content = self.build_organized_file_content(&group_items, "main");
+                let content = self.build_organized_file_content(&group_items, Self::CATEGORY_MAIN);
                 self.write_content_to_file(&content, &target_file)?;
             }
         }
 
         // Write functions to utils.rs (or similar)
         if !function_items.is_empty() {
-            let target_file = base_path.join("utils.rs");
-            let content = self.build_organized_file_content(&function_items, "main");
+            let target_file = base_path.join(Self::UTILS_RS);
+            let content = self.build_organized_file_content(&function_items, Self::CATEGORY_MAIN);
             self.write_content_to_file(&content, &target_file)?;
         }
 
@@ -856,13 +887,13 @@ impl RustFileContent {
         category: &str,
     ) -> Result<()> {
         match category {
-            "logic" => {
+            Self::CATEGORY_LOGIC => {
                 // For logic items (functions), group them all into functions.rs
-                let target_file = dir.join("functions.rs");
+                let target_file = dir.join(Self::FUNCTIONS_RS);
                 let content = self.build_organized_file_content(items, category);
                 self.write_content_to_file(&content, &target_file)?;
             }
-            "cli" | "core" => {
+            Self::CATEGORY_CLI | Self::CATEGORY_CORE => {
                 // For CLI and core items, separate types and functions
                 let mut type_items = Vec::new();
                 let mut function_items = Vec::new();
@@ -887,7 +918,7 @@ impl RustFileContent {
 
                 // Write functions to functions.rs
                 if !function_items.is_empty() {
-                    let target_file = dir.join("functions.rs");
+                    let target_file = dir.join(Self::FUNCTIONS_RS);
                     let content = self.build_organized_file_content(&function_items, category);
                     self.write_content_to_file(&content, &target_file)?;
                 }
@@ -911,7 +942,7 @@ impl RustFileContent {
         let mut content = String::new();
 
         // Add prelude import at the top
-        content.push_str("use crate::prelude::*;\n\n");
+        content.push_str(Self::PRELUDE_IMPORT);
 
         // Add items with proper spacing
         for (i, item) in items.iter().enumerate() {
