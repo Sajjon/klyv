@@ -1,3 +1,4 @@
+mod directory_content;
 mod r#enum;
 mod error;
 mod file_system_node;
@@ -7,6 +8,7 @@ mod implementation;
 mod macro_rules;
 mod named_source_items;
 mod node_content;
+mod rust_file_content;
 mod source_item;
 mod r#struct;
 mod r#trait;
@@ -14,6 +16,7 @@ mod r#type;
 mod union;
 mod r#use;
 
+pub use directory_content::*;
 pub use r#enum::*;
 pub use error::*;
 pub use file_system_node::*;
@@ -23,6 +26,7 @@ pub use implementation::*;
 pub use macro_rules::*;
 pub use named_source_items::*;
 pub use node_content::*;
+pub use rust_file_content::*;
 pub use source_item::*;
 pub use r#struct::*;
 pub use r#trait::*;

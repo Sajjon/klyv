@@ -9,6 +9,7 @@ pub mod prelude {
     pub use bon::{Builder, bon, builder};
     pub use derive_more::{Deref, From};
     pub use getset::Getters;
+    pub use indexmap::IndexMap;
     pub use log::*;
     pub use std::{
         fs,

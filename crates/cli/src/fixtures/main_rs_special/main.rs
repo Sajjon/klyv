@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
+use log::{debug, error, info};
 use std::env;
 use std::path::PathBuf;
-use log::{info, debug, error};
 
 /// Configuration for the CLI application
 #[derive(Debug, Clone)]
@@ -49,13 +49,13 @@ impl ArgumentParser {
 /// Core business logic for file processing
 #[derive(Debug)]
 pub struct FileProcessor {
-    cache: HashMap<String, String>,
+    cache: IndexMap<String, String>,
 }
 
 impl FileProcessor {
     pub fn new() -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: IndexMap::new(),
         }
     }
 
@@ -173,7 +173,7 @@ fn main() {
     }
 
     let mut processor = FileProcessor::new();
-    
+
     for file in &config.input_files {
         match processor.process_file(file) {
             Ok(result) => {
@@ -187,5 +187,8 @@ fn main() {
         }
     }
 
-    info!("Processing complete. Cache size: {}", processor.get_cache_size());
+    info!(
+        "Processing complete. Cache size: {}",
+        processor.get_cache_size()
+    );
 }

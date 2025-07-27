@@ -15,21 +15,34 @@ RustFile(
                         UseTree::Path(
                             UsePath {
                                 ident: Ident(
-                                    std,
+                                    log,
                                 ),
                                 colon2_token: PathSep,
-                                tree: UseTree::Path(
-                                    UsePath {
+                                tree: UseTree::Name(
+                                    UseName {
                                         ident: Ident(
-                                            collections,
+                                            info,
                                         ),
-                                        colon2_token: PathSep,
-                                        tree: UseTree::Name(
-                                            UseName {
-                                                ident: Ident(
-                                                    HashMap,
-                                                ),
-                                            },
+                                    },
+                                ),
+                            },
+                        ),
+                    ),
+                ),
+                Use(
+                    Use(
+                        Visibility::Inherited,
+                        [],
+                        UseTree::Path(
+                            UsePath {
+                                ident: Ident(
+                                    indexmap,
+                                ),
+                                colon2_token: PathSep,
+                                tree: UseTree::Name(
+                                    UseName {
+                                        ident: Ident(
+                                            IndexMap,
                                         ),
                                     },
                                 ),
@@ -59,27 +72,6 @@ RustFile(
                                                     Display,
                                                 ),
                                             },
-                                        ),
-                                    },
-                                ),
-                            },
-                        ),
-                    ),
-                ),
-                Use(
-                    Use(
-                        Visibility::Inherited,
-                        [],
-                        UseTree::Path(
-                            UsePath {
-                                ident: Ident(
-                                    log,
-                                ),
-                                colon2_token: PathSep,
-                                tree: UseTree::Name(
-                                    UseName {
-                                        ident: Ident(
-                                            info,
                                         ),
                                     },
                                 ),
@@ -1848,7 +1840,7 @@ RustFile(
                                                     segments: [
                                                         PathSegment {
                                                             ident: Ident(
-                                                                HashMap,
+                                                                IndexMap,
                                                             ),
                                                             arguments: PathArguments::AngleBracketed {
                                                                 colon2_token: None,
@@ -1992,7 +1984,7 @@ RustFile(
                                                     segments: [
                                                         PathSegment {
                                                             ident: Ident(
-                                                                HashMap,
+                                                                IndexMap,
                                                             ),
                                                             arguments: PathArguments::AngleBracketed {
                                                                 colon2_token: None,

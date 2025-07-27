@@ -7,14 +7,14 @@ use crate::prelude::*;
 /// Core business logic for file processing
 #[derive(Debug)]
 pub struct FileProcessor {
-    cache: HashMap<String, String>,
+    cache: IndexMap<String, String>,
 }
 
 
 
 impl FileProcessor {
     pub fn new() -> Self {
-        Self { cache: HashMap::new() }
+        Self { cache: IndexMap::new() }
     }
     pub fn process_file(&mut self, path: &PathBuf) -> Result<String, ProcessingError> {
         Ok(format!("Processed: {}", path.display()))

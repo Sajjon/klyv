@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use std::fmt::Display;
 use log::info;
+use indexmap::IndexMap;
+use std::fmt::Display;
 
 /// A user entity with authentication capabilities
 #[derive(Debug, Clone, PartialEq)]
@@ -76,12 +76,12 @@ pub fn validate_email(email: &str) -> bool {
 }
 
 /// Gets the count of users in a collection
-pub fn get_user_count(users: &HashMap<u32, User>) -> usize {
+pub fn get_user_count(users: &IndexMap<u32, User>) -> usize {
     users.len()
 }
 
 /// Finds a user by their ID
-pub fn find_user_by_id(users: &HashMap<u32, User>, id: u32) -> Option<&User> {
+pub fn find_user_by_id(users: &IndexMap<u32, User>, id: u32) -> Option<&User> {
     users.get(&id)
 }
 
