@@ -1,4 +1,3 @@
-mod doc;
 mod handle_lib_rs_special_case;
 #[allow(clippy::module_inception)]
 mod rust_file_content;
