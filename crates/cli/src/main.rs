@@ -11,8 +11,9 @@ use std::path::PathBuf;
 #[command(name = BINARY_NAME, about = "Splitting files with multiple types into separate files")]
 #[command(version = env!("CARGO_PKG_VERSION"))]
 pub struct CliArgs {
+    /// Source directory or file to split, if None is provided, it will default to the current directory
     #[arg(long, short)]
-    source: PathBuf,
+    source: Option<PathBuf>,
 
     /// If None, same dir as `source` will be used
     #[arg(long, short)]
@@ -23,12 +24,17 @@ pub struct CliArgs {
     allow_dirty: bool,
 }
 
+fn get_working_dir() -> PathBuf {
+    debug!("No source provided, using current working directory");
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
 impl TryFrom<CliArgs> for Input {
     type Error = Error;
 
     fn try_from(args: CliArgs) -> Result<Self, Self::Error> {
         Ok(Input::builder()
-            .source(args.source)
+            .source(args.source.unwrap_or(get_working_dir()))
             .maybe_out(args.out)
             .allow_git_dirty(args.allow_dirty)
             .build())
