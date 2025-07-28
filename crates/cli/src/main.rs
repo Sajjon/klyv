@@ -13,20 +13,16 @@ use std::path::PathBuf;
 pub struct CliArgs {
     #[arg(long, short)]
     source: PathBuf,
+
     /// If None, same dir as `source` will be used
     #[arg(long, short)]
     out: Option<PathBuf>,
+
+    /// Allow git dirty state
+    #[arg(long, default_value = "false")]
+    allow_dirty: bool,
 }
 
-/// Input for the CLI, containing the source path and optional output path
-#[derive(Clone, Debug, Builder, Getters)]
-pub struct Input {
-    #[getset(get = "pub")]
-    source: PathBuf,
-    /// If None, same dir as `source` will be used
-    #[getset(get = "pub")]
-    out: Option<PathBuf>,
-}
 impl TryFrom<CliArgs> for Input {
     type Error = Error;
 
@@ -34,6 +30,7 @@ impl TryFrom<CliArgs> for Input {
         Ok(Input::builder()
             .source(args.source)
             .maybe_out(args.out)
+            .allow_git_dirty(args.allow_dirty)
             .build())
     }
 }
@@ -50,10 +47,7 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
 
 pub fn run(input: Input) -> Result<FileSystemNode> {
     info!("Splitting files at {}", input.source().display());
-    split()
-        .source(input.source())
-        .out(input.out().as_ref().unwrap_or(input.source()))
-        .call()
+    split().input(input).call()
 }
 
 fn run_cli() -> Result<()> {

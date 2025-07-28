@@ -4,15 +4,28 @@ use log::warn;
 #[allow(unused_imports)]
 use std::process::Command;
 
+/// Input for the CLI, containing the source path and optional output path
+#[derive(Clone, Debug, Builder, Getters)]
+pub struct Input {
+    #[getset(get = "pub")]
+    source: PathBuf,
+    /// If None, same dir as `source` will be used
+    #[getset(get = "pub")]
+    out: Option<PathBuf>,
+    #[getset(get = "pub")]
+    allow_git_dirty: bool,
+}
+
 #[bon::builder]
-pub fn split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<FileSystemNode> {
+pub fn split(input: Input) -> Result<FileSystemNode> {
     #[cfg(not(debug_assertions))]
-    ensure_git_status_clean()?;
-    do_split().source(source).out(out).call()
+    ensure_git_status_clean(input.allow_git_dirty())?;
+    let out = input.out().as_ref().unwrap_or(input.source());
+    do_split().source(input.source()).out(out).call()
 }
 
 #[cfg(not(debug_assertions))]
-fn ensure_git_status_clean() -> Result<()> {
+fn ensure_git_status_clean(allow_git_dirty: bool) -> Result<()> {
     // Check if git is available and we're in a git repository
     let git_dir_check = Command::new("git")
         .args(["rev-parse", "--git-dir"])
