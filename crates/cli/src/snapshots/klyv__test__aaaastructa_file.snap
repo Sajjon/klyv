@@ -1,7 +1,0 @@
----
-source: crates/cli/src/test.rs
-expression: content
----
-/// Doc about AaaaStructA
-#[derive(Clone, Debug)]
-pub struct AaaaStructA;
