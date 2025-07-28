@@ -63,6 +63,7 @@ pub fn run(input: Input) -> Result<FileSystemNode> {
 
 fn run_cli() -> Result<()> {
     let args = CliArgs::parse();
+    trace!("Found CLI args: {:?}", args);
     let input = Input::try_from(args)?;
     run(input).map_to_void()
 }
