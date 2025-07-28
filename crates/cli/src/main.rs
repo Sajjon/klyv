@@ -38,7 +38,7 @@ impl TryFrom<CliArgs> for Input {
 
     fn try_from(args: CliArgs) -> Result<Self, Self::Error> {
         Ok(Input::builder()
-            .source(args.source.unwrap_or(get_working_dir()))
+            .source(args.source.unwrap_or_else(get_working_dir))
             .maybe_out(args.out)
             .allow_git_dirty(args.allow_dirty)
             .allow_git_staged(args.allow_staged)
