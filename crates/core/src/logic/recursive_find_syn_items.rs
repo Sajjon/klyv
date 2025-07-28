@@ -1,8 +1,57 @@
 use crate::prelude::*;
 use log::warn;
+use std::process::Command;
 
 #[bon::builder]
 pub fn split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<FileSystemNode> {
+    ensure_git_status_clean()?;
+    do_split().source(source).out(out).call()
+}
+
+fn ensure_git_status_clean() -> Result<()> {
+    // Check if git is available and we're in a git repository
+    let git_dir_check = Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .output();
+
+    let git_dir_output = match git_dir_check {
+        Ok(output) => output,
+        Err(_) => {
+            // Git is not available, proceed without checking
+            warn!("Git is not available, skipping repository status check");
+            return Ok(());
+        }
+    };
+
+    if !git_dir_output.status.success() {
+        // Not in a git repository, that's fine
+        return Ok(());
+    }
+
+    // We're in a git repository, check for uncommitted changes
+    let status_output = Command::new("git")
+        .args(["status", "--porcelain"])
+        .output()
+        .map_err(|e| Error::bail(format!("Failed to execute git status: {}", e)))?;
+
+    if !status_output.status.success() {
+        return Err(Error::bail("Git status command failed"));
+    }
+
+    let status_stdout = String::from_utf8_lossy(&status_output.stdout);
+
+    // If there's any output from --porcelain, there are uncommitted changes
+    if !status_stdout.trim().is_empty() {
+        return Err(Error::bail(
+            "The git repository has uncommitted changes. Please commit or stash your changes before running this command.",
+        ));
+    }
+
+    Ok(())
+}
+
+#[bon::builder]
+fn do_split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<FileSystemNode> {
     let node = find_in().path(source).call()?;
     write().node(node.clone()).out(out).call()?;
     Ok(node)
