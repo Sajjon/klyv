@@ -50,12 +50,10 @@ impl<T, E> ResultExt<T, E> for Result<T, E> {
 
 pub fn run(input: Input) -> Result<FileSystemNode> {
     info!("Splitting files at {}", input.source().display());
-    let node = find_in().path(input.source()).call()?;
-    write()
-        .node(node.clone())
+    split()
+        .source(input.source())
         .out(input.out().as_ref().unwrap_or(input.source()))
-        .call()?;
-    Ok(node)
+        .call()
 }
 
 fn run_cli() -> Result<()> {

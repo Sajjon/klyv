@@ -2,10 +2,10 @@ use crate::prelude::*;
 use log::warn;
 
 #[bon::builder]
-pub fn split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<()> {
+pub fn split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<FileSystemNode> {
     let node = find_in().path(source).call()?;
-    write().node(node).out(out).call()?;
-    Ok(())
+    write().node(node.clone()).out(out).call()?;
+    Ok(node)
 }
 
 /// This function splits all the Rust types identified in the given path into separate files if the type is supported - see `enum SourceItem` for list of supported types.
@@ -21,12 +21,12 @@ pub fn split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<()> {
 /// For types which has `impl` blocks the impl blocks will be moved to the same
 /// file as the type they implement.
 #[bon::builder]
-pub fn write(node: FileSystemNode, out: impl AsRef<Path>) -> Result<()> {
+fn write(node: FileSystemNode, out: impl AsRef<Path>) -> Result<()> {
     node.write_to(out.as_ref())
 }
 
 #[bon::builder]
-pub fn find_in(path: impl AsRef<std::path::Path>) -> Result<FileSystemNode> {
+fn find_in(path: impl AsRef<std::path::Path>) -> Result<FileSystemNode> {
     let path = path.as_ref().to_path_buf();
 
     validate_path_exists(&path)?;
