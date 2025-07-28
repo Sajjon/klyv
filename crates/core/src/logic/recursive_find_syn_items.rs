@@ -1,13 +1,17 @@
 use crate::prelude::*;
 use log::warn;
+
+#[allow(unused_imports)]
 use std::process::Command;
 
 #[bon::builder]
 pub fn split(source: impl AsRef<Path>, out: impl AsRef<Path>) -> Result<FileSystemNode> {
+    #[cfg(not(debug_assertions))]
     ensure_git_status_clean()?;
     do_split().source(source).out(out).call()
 }
 
+#[cfg(not(debug_assertions))]
 fn ensure_git_status_clean() -> Result<()> {
     // Check if git is available and we're in a git repository
     let git_dir_check = Command::new("git")
