@@ -73,7 +73,8 @@ impl RustFileContent {
         base_path: &Path,
     ) -> Result<()> {
         if !type_items.is_empty() {
-            let types_dir = base_path.join(Self::FOLDER_TYPES);
+            let output_dir = self.determine_output_directory(base_path);
+            let types_dir = output_dir.join(Self::FOLDER_TYPES);
             std::fs::create_dir_all(&types_dir)
                 .map_err(|e| Error::bail(format!("Failed to create types directory: {}", e)))?;
             self.write_organized_items(type_items, &types_dir, Self::CATEGORY_TYPES)?;
@@ -99,7 +100,8 @@ impl RustFileContent {
         base_path: &Path,
     ) -> Result<()> {
         if !logic_items.is_empty() {
-            let logic_dir = base_path.join(Self::FOLDER_LOGIC);
+            let output_dir = self.determine_output_directory(base_path);
+            let logic_dir = output_dir.join(Self::FOLDER_LOGIC);
             std::fs::create_dir_all(&logic_dir)
                 .map_err(|e| Error::bail(format!("Failed to create logic directory: {}", e)))?;
             self.write_organized_items(logic_items, &logic_dir, Self::CATEGORY_LOGIC)?;
@@ -110,10 +112,12 @@ impl RustFileContent {
 
     /// Determines the path for the lib.rs file
     fn determine_lib_rs_path(&self, base_path: &Path) -> PathBuf {
-        if base_path.is_dir() {
-            base_path.join(Self::LIB_RS)
-        } else {
+        if base_path.is_file() {
+            // If base_path is a file, use it directly (this handles the case where we're given src/lib.rs)
             base_path.to_path_buf()
+        } else {
+            // If base_path is a directory, join with lib.rs
+            base_path.join(Self::LIB_RS)
         }
     }
 

@@ -71,9 +71,10 @@ impl RustFileContent {
     /// Writes type items to individual files for main.rs special case
     fn write_main_rs_type_items(&self, type_items: &[SourceItem], base_path: &Path) -> Result<()> {
         if !type_items.is_empty() {
+            let output_dir = self.determine_output_directory(base_path);
             let grouped_items = self.group_items_by_target_file(type_items);
             for (file_name, group_items) in grouped_items {
-                let target_file = base_path.join(&file_name);
+                let target_file = output_dir.join(&file_name);
                 let content = self.build_organized_file_content(&group_items, Self::CATEGORY_MAIN);
                 self.write_content_to_file(&content, &target_file)?;
             }
@@ -88,7 +89,8 @@ impl RustFileContent {
         base_path: &Path,
     ) -> Result<()> {
         if !function_items.is_empty() {
-            let target_file = base_path.join(Self::UTILS_RS);
+            let output_dir = self.determine_output_directory(base_path);
+            let target_file = output_dir.join(Self::UTILS_RS);
             let content = self.build_organized_file_content(function_items, Self::CATEGORY_MAIN);
             self.write_content_to_file(&content, &target_file)?;
         }
@@ -103,7 +105,8 @@ impl RustFileContent {
         base_path: &Path,
     ) -> Result<()> {
         if !type_items.is_empty() || has_functions {
-            self.create_main_mod_rs(base_path, type_items, has_functions)?;
+            let output_dir = self.determine_output_directory(base_path);
+            self.create_main_mod_rs(&output_dir, type_items, has_functions)?;
         }
         Ok(())
     }
@@ -116,10 +119,12 @@ impl RustFileContent {
         has_functions: bool,
         main_items: &[SourceItem],
     ) -> Result<()> {
-        let main_rs_path = if base_path.is_dir() {
-            base_path.join(Self::MAIN_RS)
-        } else {
+        let main_rs_path = if base_path.is_file() {
+            // If base_path is a file, use it directly (this handles the case where we're given src/main.rs)
             base_path.to_path_buf()
+        } else {
+            // If base_path is a directory, join with main.rs
+            base_path.join(Self::MAIN_RS)
         };
 
         let mut content = String::new();

@@ -107,6 +107,16 @@ impl RustFileContent {
         Ok(())
     }
 
+    /// Determines the output directory based on the base path
+    /// If base_path is a file, use its parent directory; if it's a directory, use it directly
+    pub(super) fn determine_output_directory(&self, base_path: &Path) -> PathBuf {
+        if base_path.is_file() {
+            base_path.parent().unwrap_or(Path::new(".")).to_path_buf()
+        } else {
+            base_path.to_path_buf()
+        }
+    }
+
     /// Groups items by target file and writes each group to its file
     fn process_and_write_grouped_items(&self, base_path: &Path) -> Result<()> {
         let items = self.content().items();
