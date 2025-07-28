@@ -22,6 +22,10 @@ pub struct CliArgs {
     /// Allow git dirty state
     #[arg(long, default_value = "false")]
     allow_dirty: bool,
+
+    /// Allow git staged state
+    #[arg(long, default_value = "false")]
+    allow_staged: bool,
 }
 
 fn get_working_dir() -> PathBuf {
@@ -37,6 +41,7 @@ impl TryFrom<CliArgs> for Input {
             .source(args.source.unwrap_or(get_working_dir()))
             .maybe_out(args.out)
             .allow_git_dirty(args.allow_dirty)
+            .allow_git_staged(args.allow_staged)
             .build())
     }
 }

@@ -13,13 +13,15 @@ pub struct Input {
     #[getset(get = "pub")]
     out: Option<PathBuf>,
     #[getset(get = "pub")]
+    allow_git_staged: bool,
+    #[getset(get = "pub")]
     allow_git_dirty: bool,
 }
 
 #[bon::builder]
 pub fn split(input: Input) -> Result<FileSystemNode> {
     #[cfg(not(debug_assertions))]
-    ensure_git_status_clean(false, *input.allow_git_dirty())?;
+    ensure_git_status_clean(*input.allow_git_staged(), *input.allow_git_dirty())?;
     let out = input.out().as_ref().unwrap_or(input.source());
     do_split().source(input.source()).out(out).call()
 }

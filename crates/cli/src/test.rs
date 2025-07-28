@@ -19,6 +19,7 @@ fn test() {
         .source(source_path.to_path_buf())
         .maybe_out(Some(out_path.clone()))
         .allow_git_dirty(true)
+        .allow_git_staged(true)
         .build();
 
     let tree = run(input).unwrap();
@@ -108,6 +109,7 @@ fn test_lib_rs_special_case_handling() {
         .source(source_path.to_path_buf())
         .maybe_out(Some(out_path.clone()))
         .allow_git_dirty(true)
+        .allow_git_staged(true)
         .build();
 
     let tree = run(input).unwrap();
@@ -211,6 +213,7 @@ fn test_main_rs_special_case_handling() {
         .source(source_path.to_path_buf())
         .maybe_out(Some(out_path.clone()))
         .allow_git_dirty(true)
+        .allow_git_staged(true)
         .build();
 
     let result = run(input);
