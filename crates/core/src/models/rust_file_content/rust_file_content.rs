@@ -260,41 +260,4 @@ impl RustFileContent {
         combined.sort();
         combined
     }
-
-    /// Checks if this is a lib.rs file that should receive special treatment
-    fn is_lib_rs_special_case(&self) -> bool {
-        let file_name = self.content().name();
-        file_name == Self::LIB_RS && self.has_multiple_types_or_functions()
-    }
-
-    /// Checks if this is a main.rs file that should receive special treatment
-    fn is_main_rs_special_case(&self) -> bool {
-        let file_name = self.content().name();
-        file_name == Self::MAIN_RS && self.has_multiple_types_or_functions_for_main()
-    }
-
-    /// Checks if the file has multiple types or functions that warrant special organization
-    fn has_multiple_types_or_functions(&self) -> bool {
-        let items = self.content().items();
-        let type_count = items.iter().filter(|item| self.is_type_item(item)).count();
-        let function_count = items
-            .iter()
-            .filter(|item| matches!(item, SourceItem::Function(_)))
-            .count();
-
-        type_count > 0 || function_count > 0
-    }
-
-    /// Checks if the main.rs file has types or functions that warrant special organization
-    /// For main.rs, we want to organize if there are types or non-main functions
-    fn has_multiple_types_or_functions_for_main(&self) -> bool {
-        let items = self.content().items();
-        let type_count = items.iter().filter(|item| self.is_type_item(item)).count();
-        let non_main_function_count = items
-            .iter()
-            .filter(|item| matches!(item, SourceItem::Function(f) if f.sig.ident != Self::MAIN_FUNCTION))
-            .count();
-
-        type_count > 0 || non_main_function_count > 0
-    }
 }

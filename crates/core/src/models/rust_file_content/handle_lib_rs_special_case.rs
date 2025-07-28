@@ -1,6 +1,24 @@
 use crate::prelude::*;
 
 impl RustFileContent {
+    /// Checks if this is a lib.rs file that should receive special treatment
+    pub(super) fn is_lib_rs_special_case(&self) -> bool {
+        let file_name = self.content().name();
+        file_name == Self::LIB_RS && self.has_multiple_types_or_functions()
+    }
+
+    /// Checks if the file has multiple types or functions that warrant special organization
+    fn has_multiple_types_or_functions(&self) -> bool {
+        let items = self.content().items();
+        let type_count = items.iter().filter(|item| self.is_type_item(item)).count();
+        let function_count = items
+            .iter()
+            .filter(|item| matches!(item, SourceItem::Function(_)))
+            .count();
+
+        type_count > 0 || function_count > 0
+    }
+
     /// Handles the special lib.rs case by organizing into types and logic folders
     pub(super) fn handle_lib_rs_special_case(&self, base_path: &Path) -> Result<()> {
         let items = self.content().items();
