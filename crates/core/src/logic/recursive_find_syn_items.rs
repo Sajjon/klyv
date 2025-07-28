@@ -19,13 +19,16 @@ pub struct Input {
 #[bon::builder]
 pub fn split(input: Input) -> Result<FileSystemNode> {
     #[cfg(not(debug_assertions))]
-    ensure_git_status_clean(*input.allow_git_dirty())?;
+    ensure_git_status_clean(false, *input.allow_git_dirty())?;
     let out = input.out().as_ref().unwrap_or(input.source());
     do_split().source(input.source()).out(out).call()
 }
 
-#[cfg(not(debug_assertions))]
-fn ensure_git_status_clean(allow_git_dirty: bool) -> Result<()> {
+#[allow(dead_code)]
+fn ensure_git_status_clean(allow_git_staged: bool, allow_git_dirty: bool) -> Result<()> {
+    // Dirty is a superset of staged, so if we allow dirty, we also allow staged
+    let allow_git_staged = allow_git_staged || allow_git_dirty;
+
     // Check if git is available and we're in a git repository
     let git_dir_check = Command::new("git")
         .args(["rev-parse", "--git-dir"])
@@ -57,11 +60,51 @@ fn ensure_git_status_clean(allow_git_dirty: bool) -> Result<()> {
 
     let status_stdout = String::from_utf8_lossy(&status_output.stdout);
 
-    // If there's any output from --porcelain, there are uncommitted changes
-    if !status_stdout.trim().is_empty() {
-        return Err(Error::bail(
-            "The git repository has uncommitted changes. Please commit or stash your changes before running this command.",
-        ));
+    if status_stdout.trim().is_empty() {
+        // Working tree is clean
+        return Ok(());
+    }
+
+    // Parse git status output to distinguish between staged and unstaged changes
+    let mut has_staged_changes = false;
+    let mut has_unstaged_changes = false;
+
+    for line in status_stdout.lines() {
+        if line.len() < 2 {
+            continue;
+        }
+
+        let index_status = line.chars().next().unwrap_or(' ');
+        let worktree_status = line.chars().nth(1).unwrap_or(' ');
+
+        // Check for staged changes (index status is not ' ' or '?')
+        if index_status != ' ' && index_status != '?' {
+            has_staged_changes = true;
+        }
+
+        // Check for unstaged changes (worktree status is not ' ')
+        if worktree_status != ' ' {
+            has_unstaged_changes = true;
+        }
+    }
+
+    // Build error message based on what changes exist and what's allowed
+    let mut error_parts = Vec::new();
+
+    if has_staged_changes && !allow_git_staged {
+        error_parts.push("staged changes");
+    }
+
+    if has_unstaged_changes && !allow_git_dirty {
+        error_parts.push("unstaged changes");
+    }
+
+    if !error_parts.is_empty() {
+        let changes_desc = error_parts.join(" and ");
+        return Err(Error::bail(format!(
+            "The git repository has {}. Please commit or stash your changes before running this command.",
+            changes_desc
+        )));
     }
 
     Ok(())
