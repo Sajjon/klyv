@@ -65,6 +65,7 @@ fn run_cli() -> Result<()> {
     let args = CliArgs::parse();
     trace!("Found CLI args: {:?}", args);
     let input = Input::try_from(args)?;
+    trace!("Input: {:?}", input);
     run(input).map_to_void()
 }
 
