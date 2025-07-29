@@ -38,7 +38,7 @@ impl RustFileContent {
         Ok(())
     }
 
-    /// Categorizes items into types, logic (functions), and other items
+    /// Categorizes items into types, logic (functions and macros), and other items
     fn categorize_lib_rs_items(
         &self,
         items: &[SourceItem],
@@ -49,7 +49,9 @@ impl RustFileContent {
 
         for item in items {
             match item {
-                SourceItem::Function(_) => logic_items.push(item.clone()),
+                SourceItem::Function(_) | SourceItem::MacroRules(_) => {
+                    logic_items.push(item.clone())
+                }
                 _ if self.is_type_item(item) => type_items.push(item.clone()),
                 _ => other_items.push(item.clone()),
             }
@@ -86,9 +88,29 @@ impl RustFileContent {
     /// Creates mod.rs for the logic directory  
     fn create_logic_mod_rs(&self, logic_dir: &Path, items: &[SourceItem]) -> Result<()> {
         if !items.is_empty() {
-            // For logic items, we always create functions.rs
-            let module_names = vec![Self::FUNCTIONS_MODULE.to_string()];
-            self.write_mod_file_content(&logic_dir.join(Self::MOD_RS), module_names)?;
+            let mut module_names = Vec::new();
+
+            // Check if we have functions (they go into functions.rs)
+            let has_functions = items
+                .iter()
+                .any(|item| matches!(item, SourceItem::Function(_)));
+            if has_functions {
+                module_names.push(Self::FUNCTIONS_MODULE.to_string());
+            }
+
+            // Add module names for each macro (they get individual files)
+            for item in items {
+                if let SourceItem::MacroRules(macro_item) = item {
+                    if let Some(ident) = &macro_item.ident {
+                        module_names.push(ident.to_string());
+                    }
+                }
+            }
+
+            if !module_names.is_empty() {
+                module_names.sort();
+                self.write_mod_file_content(&logic_dir.join(Self::MOD_RS), module_names)?;
+            }
         }
         Ok(())
     }
@@ -182,7 +204,6 @@ impl RustFileContent {
         if self.should_add_common_imports(other_items) {
             content.push('\n');
             content.push_str("    pub use std::{\n");
-            content.push_str("        collections::IndexMap,\n");
             content.push_str("        path::{Path, PathBuf},\n");
             content.push_str("    };\n");
         }
@@ -215,7 +236,7 @@ impl RustFileContent {
     }
 
     /// Writes organized items to separate files in the given directory
-    fn write_organized_items(
+    pub(super) fn write_organized_items(
         &self,
         items: &[SourceItem],
         dir: &Path,
@@ -252,11 +273,48 @@ impl RustFileContent {
         Ok(())
     }
 
-    /// Writes logic items (functions) to functions.rs
+    /// Writes logic items (functions and macros) to individual files
     fn write_logic_items(&self, items: &[SourceItem], dir: &Path, category: &str) -> Result<()> {
-        let target_file = dir.join(Self::FUNCTIONS_RS);
-        let content = self.build_organized_file_content(items, category);
-        self.write_content_to_file(&content, &target_file)?;
+        // Separate functions and macros
+        let mut functions = Vec::new();
+        let mut macros = Vec::new();
+
+        for item in items {
+            match item {
+                SourceItem::Function(_) => functions.push(item.clone()),
+                SourceItem::MacroRules(_) => {
+                    macros.push(item.clone());
+                }
+                _ => functions.push(item.clone()), // fallback for other logic items
+            }
+        }
+
+        // Write functions to functions.rs if any exist
+        if !functions.is_empty() {
+            let functions_file = dir.join(Self::FUNCTIONS_RS);
+            let content = self.build_organized_file_content(&functions, category);
+            self.write_content_to_file(&content, &functions_file)?;
+        }
+
+        // Write each macro to its own file with #[macro_export]
+        for item in &macros {
+            if let SourceItem::MacroRules(macro_item) = item {
+                if let Some(ident) = &macro_item.ident {
+                    let macro_name = ident.to_string();
+                    let macro_file = dir.join(format!("{}.rs", macro_name));
+
+                    // Build content with #[macro_export] attribute
+                    let mut content = String::new();
+                    content.push_str(Self::PRELUDE_IMPORT);
+                    content.push_str("#[macro_export]\n");
+                    content.push_str(&self.source_item_to_string(item));
+                    content.push('\n');
+
+                    self.write_content_to_file(&content, &macro_file)?;
+                }
+            }
+        }
+
         Ok(())
     }
 

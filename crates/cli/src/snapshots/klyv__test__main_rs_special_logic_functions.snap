@@ -1,0 +1,49 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Core business logic function
+pub fn validate_input(input: &str) -> Result<(), ProcessingError> {
+    if input.is_empty() {
+        return Err(
+            ProcessingError::ValidationError("Input cannot be empty".to_string()),
+        );
+    }
+    Ok(())
+}
+
+
+
+/// Core utility function
+pub fn calculate_metrics(docs: &[Document]) -> DocumentMetrics {
+    DocumentMetrics {
+        total_count: docs.len(),
+        total_length: docs.iter().map(|d| d.content.len()).sum(),
+        average_length: if docs.is_empty() {
+            0.0
+        } else {
+            docs.iter().map(|d| d.content.len()).sum::<usize>() as f64
+                / docs.len() as f64
+        },
+    }
+}
+
+
+
+/// CLI-specific helper function
+pub fn parse_command_line_args() -> Vec<String> {
+    env::args().skip(1).collect()
+}
+
+
+
+/// CLI-specific helper function
+pub fn display_help() {
+    info!("Usage: myapp [OPTIONS] [FILES]");
+    info!("Options:");
+    info!("  -v, --verbose    Enable verbose output");
+    info!("  -o, --output     Specify output directory");
+    info!("  -h, --help       Show this help message");
+}

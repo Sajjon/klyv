@@ -2,9 +2,15 @@
 source: crates/cli/src/test.rs
 expression: content
 ---
-mod utils;
+mod models;
+mod logic;
 
-use utils::*;
+pub mod prelude {
+    pub use crate::models::*;
+    pub use crate::logic::*;
+}
+
+use prelude::*;
 
 use indexmap::IndexMap;
 
