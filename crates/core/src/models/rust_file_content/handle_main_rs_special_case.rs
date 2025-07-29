@@ -26,7 +26,7 @@ impl RustFileContent {
         let (type_items, logic_items, main_items) = self.categorize_main_rs_items(items);
 
         // Create models and logic folders like lib.rs does
-        self.create_models_folder_if_needed(&type_items, base_path)?;
+        self.create_types_folder_if_needed(&type_items, base_path)?;
         self.create_main_logic_folder_if_needed(&logic_items, base_path)?;
 
         // Create the new main.rs with module declarations and main function
@@ -67,27 +67,27 @@ impl RustFileContent {
         (type_items, logic_items, main_items)
     }
 
-    /// Creates models folder and files if there are type items
-    fn create_models_folder_if_needed(
+    /// Creates types folder and files if there are type items
+    fn create_types_folder_if_needed(
         &self,
         type_items: &[SourceItem],
         base_path: &Path,
     ) -> Result<()> {
         if !type_items.is_empty() {
             let output_dir = self.determine_output_directory(base_path);
-            let models_dir = output_dir.join(Self::FOLDER_MODELS);
-            std::fs::create_dir_all(&models_dir)
-                .map_err(|e| Error::bail(format!("Failed to create models directory: {}", e)))?;
+            let types_dir = output_dir.join(Self::FOLDER_TYPES);
+            std::fs::create_dir_all(&types_dir)
+                .map_err(|e| Error::bail(format!("Failed to create types directory: {}", e)))?;
 
             // Group items by target file and write each group
             let grouped_items = self.group_items_by_target_file(type_items);
             for (file_name, group_items) in grouped_items {
-                let target_file = models_dir.join(&file_name);
+                let target_file = types_dir.join(&file_name);
                 let content = self.build_organized_file_content(&group_items, Self::CATEGORY_TYPES);
                 self.write_content_to_file(&content, &target_file)?;
             }
 
-            self.create_main_models_mod_rs(&models_dir, type_items)?;
+            self.create_main_models_mod_rs(&types_dir, type_items)?;
         }
         Ok(())
     }

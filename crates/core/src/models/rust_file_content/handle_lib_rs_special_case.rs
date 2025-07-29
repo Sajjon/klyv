@@ -24,7 +24,7 @@ impl RustFileContent {
         let items = self.content().items();
         let (type_items, logic_items, other_items) = self.categorize_lib_rs_items(items);
 
-        self.create_types_folder_if_needed(&type_items, base_path)?;
+        self.create_types_folder_if_needed2(&type_items, base_path)?;
         self.create_logic_folder_if_needed(&logic_items, base_path)?;
 
         // Create the new lib.rs with prelude module
@@ -69,7 +69,7 @@ impl RustFileContent {
     }
 
     /// Creates types folder and files if there are type items
-    fn create_types_folder_if_needed(
+    fn create_types_folder_if_needed2(
         &self,
         type_items: &[SourceItem],
         base_path: &Path,

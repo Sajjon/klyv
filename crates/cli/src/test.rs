@@ -221,20 +221,20 @@ fn test_main_rs_special_case_handling() {
 
     // Verify the expected file structure was created
     let main_rs_path = out_path.join("main.rs");
-    let models_dir = out_path.join("models");
+    let types_dir = out_path.join("types");
     let logic_dir = out_path.join("logic");
-    let models_mod_rs = out_path.join("models/mod.rs");
+    let types_mod_rs = out_path.join("types/mod.rs");
     let logic_mod_rs = out_path.join("logic/mod.rs");
 
     assert!(main_rs_path.exists(), "main.rs should exist");
-    assert!(models_dir.exists(), "models directory should exist");
+    assert!(types_dir.exists(), "types directory should exist");
     assert!(logic_dir.exists(), "logic directory should exist");
-    assert!(models_mod_rs.exists(), "models/mod.rs should exist");
+    assert!(types_mod_rs.exists(), "types/mod.rs should exist");
     assert!(logic_mod_rs.exists(), "logic/mod.rs should exist");
 
     // Individual snapshot tests for each generated file
     assert_generated_file_snapshot(&out_path, "main.rs", "main_rs_special_main");
-    assert_generated_file_snapshot(&out_path, "models/mod.rs", "main_rs_special_models_mod");
+    assert_generated_file_snapshot(&out_path, "types/mod.rs", "main_rs_special_types_mod");
     assert_generated_file_snapshot(&out_path, "logic/mod.rs", "main_rs_special_logic_mod");
     assert_generated_file_snapshot(
         &out_path,
@@ -245,33 +245,33 @@ fn test_main_rs_special_case_handling() {
     // Check for individual type files in models directory
     assert_generated_file_snapshot(
         &out_path,
-        "models/cli_config.rs",
+        "types/cli_config.rs",
         "main_rs_special_cli_config",
     );
     assert_generated_file_snapshot(
         &out_path,
-        "models/argument_parser.rs",
+        "types/argument_parser.rs",
         "main_rs_special_argument_parser",
     );
-    assert_generated_file_snapshot(&out_path, "models/document.rs", "main_rs_special_document");
+    assert_generated_file_snapshot(&out_path, "types/document.rs", "main_rs_special_document");
     assert_generated_file_snapshot(
         &out_path,
-        "models/file_processor.rs",
+        "types/file_processor.rs",
         "main_rs_special_file_processor",
     );
     assert_generated_file_snapshot(
         &out_path,
-        "models/processing_error.rs",
+        "types/processing_error.rs",
         "main_rs_special_processing_error",
     );
     assert_generated_file_snapshot(
         &out_path,
-        "models/document_metadata.rs",
+        "types/document_metadata.rs",
         "main_rs_special_document_metadata",
     );
     assert_generated_file_snapshot(
         &out_path,
-        "models/document_metrics.rs",
+        "types/document_metrics.rs",
         "main_rs_special_document_metrics",
     );
 }

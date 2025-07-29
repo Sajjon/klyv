@@ -50,7 +50,6 @@ impl RustFileContent {
 
     // pub constants for folder names
     pub const FOLDER_TYPES: &'static str = "types";
-    pub const FOLDER_MODELS: &'static str = "models";
     pub const FOLDER_LOGIC: &'static str = "logic";
 
     // pub constants for module names
