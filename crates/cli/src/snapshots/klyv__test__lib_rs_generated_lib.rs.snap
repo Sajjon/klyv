@@ -2,8 +2,15 @@
 source: crates/cli/src/test.rs
 expression: content
 ---
-mod logic;
 mod types;
+mod logic;
+
+pub mod prelude {
+    pub use crate::types::*;
+    pub use crate::logic::*;
+}
+
+use prelude::*;
 
 use log::info;
 
@@ -12,9 +19,3 @@ use indexmap::IndexMap;
 
 
 use std::fmt::Display;
-
-
-pub mod prelude {
-    pub use crate::logic::*;
-    pub use crate::types::*;
-}
