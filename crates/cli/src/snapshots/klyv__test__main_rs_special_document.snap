@@ -13,7 +13,6 @@ pub struct Document {
 }
 
 
-
 impl Document {
     pub fn new(title: String, content: String) -> Self {
         Self {

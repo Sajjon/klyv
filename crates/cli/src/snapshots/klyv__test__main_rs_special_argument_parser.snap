@@ -11,7 +11,6 @@ pub struct ArgumentParser {
 }
 
 
-
 impl ArgumentParser {
     pub fn new() -> Self {
         Self {

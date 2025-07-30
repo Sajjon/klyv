@@ -11,7 +11,6 @@ pub struct FileProcessor {
 }
 
 
-
 impl FileProcessor {
     pub fn new() -> Self {
         Self { cache: IndexMap::new() }

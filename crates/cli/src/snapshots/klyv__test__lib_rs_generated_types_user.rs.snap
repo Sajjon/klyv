@@ -14,13 +14,11 @@ pub struct User {
 }
 
 
-
 impl Identifiable for User {
     fn id(&self) -> u32 {
         self.id
     }
 }
-
 
 
 impl Validatable for User {

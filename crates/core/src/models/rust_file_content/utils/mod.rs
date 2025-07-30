@@ -124,8 +124,8 @@ impl RustFileContent {
         match (prev_item, current_item) {
             // Use statements should have single newlines between them
             (SourceItem::Use(_), SourceItem::Use(_)) => "\n".to_string(),
-            // Everything else gets double newlines for better separation
-            _ => "\n\n".to_string(),
+            // Everything else gets single newlines for better separation
+            _ => "\n".to_string(),
         }
     }
 

@@ -3,49 +3,42 @@ source: crates/cli/src/test.rs
 expression: content
 ---
 use std::str::FromStr;
-
 /// Doc about AaaaStructB
 #[derive(Clone, Debug)]
 pub struct AaaaStructB {
     /// Doc about `aaaa_struct_a`
     aaaa_struct_a: AaaaStructA,
 }
-
 impl AaaaStructB {
     /// Magic
     pub fn magic() -> u8 {
         42
     }
 }
-
 impl AaaaStructB {
     /// Magic self
     pub fn magic_self(self) -> u8 {
         42
     }
 }
-
 impl AaaaStructB {
     /// Magic self ref
     pub fn magic_self_ref(&self) -> u8 {
         42
     }
 }
-
 impl AaaaStructB {
     /// Magic self ref mut
     pub fn magic_self_ref_mut(&mut self) -> u8 {
         42
     }
 }
-
 impl AaaaStructB {
     /// Magic self ref arg
     pub fn magic_self_ref_arg(&self, magic: u8) -> u8 {
         magic
     }
 }
-
 impl MagicTrait for AaaaStructB {
     /// Magic self
     fn trait_magic_self(self) -> u8 {

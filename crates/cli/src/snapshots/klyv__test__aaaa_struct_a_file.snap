@@ -3,7 +3,6 @@ source: crates/cli/src/test.rs
 expression: content
 ---
 use std::str::FromStr;
-
 /// Doc about AaaaStructA
 #[derive(Clone, Debug)]
 pub struct AaaaStructA;
