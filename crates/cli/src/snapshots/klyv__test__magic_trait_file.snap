@@ -3,6 +3,7 @@ source: crates/cli/src/test.rs
 expression: content
 ---
 use std::str::FromStr;
+
 pub trait MagicTrait: Clone + std::fmt::Debug {
     /// Magic
     fn trait_magic() -> u8 {

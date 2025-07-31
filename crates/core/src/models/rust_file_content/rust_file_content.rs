@@ -174,19 +174,9 @@ impl RustFileContent {
     fn build_file_content(&self, items: &[SourceItem]) -> String {
         let mut content = String::new();
 
-        for (i, item) in items.iter().enumerate() {
-            if i > 0 {
-                content.push('\n');
-            }
-
+        for item in items {
             let item_code = self.source_item_to_string(item);
-            // Strip trailing newlines to have full control over spacing
-            let trimmed_code = item_code.trim_end();
-            content.push_str(trimmed_code);
-        }
-
-        // Ensure the file ends with a newline
-        if !content.is_empty() {
+            content.push_str(&item_code);
             content.push('\n');
         }
 

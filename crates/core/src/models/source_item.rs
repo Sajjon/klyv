@@ -1,11 +1,11 @@
 use crate::prelude::*;
-use derive_more::TryUnwrap;
+use derive_more::{IsVariant, TryUnwrap};
 use proc_macro2::TokenStream;
 use syn::Item;
 
 /// A Rust type, struct, enum, typealias, function, macro or implementation of
 /// struct or enum.
-#[derive(Clone, Debug, TryUnwrap)]
+#[derive(Clone, Debug, TryUnwrap, IsVariant)]
 pub enum SourceItem {
     Enum(Enum),
     Struct(Struct),

@@ -13,17 +13,9 @@ pub mod prelude {
 use prelude::*;
 
 use indexmap::IndexMap;
-
-
 use log::{debug, error, info};
-
-
 use std::env;
-
-
 use std::path::PathBuf;
-
-
 fn main() {
     let parser = ArgumentParser::new();
     let config = match parser.parse() {

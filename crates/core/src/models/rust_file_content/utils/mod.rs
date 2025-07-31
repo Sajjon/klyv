@@ -17,11 +17,9 @@ impl RustFileContent {
         content.push_str(Self::PRELUDE_IMPORT);
 
         // Add items with proper spacing
-        for (i, item) in items.iter().enumerate() {
-            if i > 0 {
-                content.push('\n');
-            }
+        for item in items {
             content.push_str(&self.source_item_to_string(item));
+            content.push('\n');
         }
 
         content

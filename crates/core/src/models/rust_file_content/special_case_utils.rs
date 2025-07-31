@@ -219,12 +219,13 @@ impl RustFileContent {
             if has_types || has_logic {
                 content.push('\n');
             }
-            for (i, item) in main_items.iter().enumerate() {
-                if i > 0 {
+            for item in main_items {
+                content.push_str(&self.source_item_to_string(item));
+
+                // No empty lines between `use` statements
+                if !item.is_use() {
                     content.push('\n');
                 }
-                content.push_str(&self.source_item_to_string(item));
-                content.push('\n');
             }
         }
 

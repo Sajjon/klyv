@@ -3,6 +3,7 @@ source: crates/cli/src/test.rs
 expression: content
 ---
 use std::str::FromStr;
+
 /// Doc about AaaaEnum
 #[derive(Clone, Debug)]
 pub enum AaaaEnum {
@@ -11,6 +12,7 @@ pub enum AaaaEnum {
     /// Doc about AaaaB variant
     AaaaB(AaaaStructB),
 }
+
 impl AaaaEnum {
     /// Much magic
     /// Very good number
