@@ -10,7 +10,6 @@ pub struct FileProcessor {
     cache: IndexMap<String, String>,
 }
 
-
 impl FileProcessor {
     pub fn new() -> Self {
         Self { cache: IndexMap::new() }

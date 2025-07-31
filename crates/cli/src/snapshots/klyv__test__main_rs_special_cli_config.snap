@@ -12,7 +12,6 @@ pub struct CliConfig {
     pub input_files: Vec<PathBuf>,
 }
 
-
 impl CliConfig {
     pub fn new() -> Self {
         Self {

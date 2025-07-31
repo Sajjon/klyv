@@ -23,7 +23,6 @@ impl RustFileContent {
                 content.push_str(&spacing);
             }
             content.push_str(&self.source_item_to_string(item));
-            content.push('\n');
         }
 
         content

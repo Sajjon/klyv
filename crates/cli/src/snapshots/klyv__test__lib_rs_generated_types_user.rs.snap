@@ -13,13 +13,11 @@ pub struct User {
     pub role: Role,
 }
 
-
 impl Identifiable for User {
     fn id(&self) -> u32 {
         self.id
     }
 }
-
 
 impl Validatable for User {
     fn is_valid(&self) -> bool {

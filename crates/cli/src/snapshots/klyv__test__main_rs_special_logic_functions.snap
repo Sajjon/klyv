@@ -14,7 +14,6 @@ pub fn validate_input(input: &str) -> Result<(), ProcessingError> {
     Ok(())
 }
 
-
 /// Core utility function
 pub fn calculate_metrics(docs: &[Document]) -> DocumentMetrics {
     DocumentMetrics {
@@ -29,12 +28,10 @@ pub fn calculate_metrics(docs: &[Document]) -> DocumentMetrics {
     }
 }
 
-
 /// CLI-specific helper function
 pub fn parse_command_line_args() -> Vec<String> {
     env::args().skip(1).collect()
 }
-
 
 /// CLI-specific helper function
 pub fn display_help() {
