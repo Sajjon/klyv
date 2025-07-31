@@ -41,23 +41,25 @@ impl RustFileContent {
         base_path: &Path,
         config: &SpecialCaseConfig,
     ) -> Result<()> {
-        if !type_items.is_empty() {
-            let output_dir = self.determine_output_directory(base_path);
-            let types_dir = output_dir.join(config.types_folder);
-            std::fs::create_dir_all(&types_dir)
-                .map_err(|e| Error::bail(format!("Failed to create types directory: {}", e)))?;
-
-            // Group items by target file and write each group
-            let grouped_items = self.group_items_by_target_file(type_items);
-            for (file_name, group_items) in grouped_items {
-                let target_file = types_dir.join(&file_name);
-                let content =
-                    self.build_organized_file_content(&group_items, config.types_category);
-                self.write_content_to_file(&content, &target_file)?;
-            }
-
-            self.create_types_mod_rs_shared(&types_dir, type_items)?;
+        if type_items.is_empty() {
+            return Ok(());
         }
+
+        let output_dir = self.determine_output_directory(base_path);
+        let types_dir = output_dir.join(config.types_folder);
+        std::fs::create_dir_all(&types_dir)
+            .map_err(|e| Error::bail(format!("Failed to create types directory: {}", e)))?;
+
+        // Group items by target file and write each group
+        let grouped_items = self.group_items_by_target_file(type_items);
+
+        for (file_name, group_items) in grouped_items {
+            let target_file = types_dir.join(&file_name);
+            let content = self.build_organized_file_content(&group_items, config.types_category);
+            self.write_content_to_file(&content, &target_file)?;
+        }
+
+        self.create_types_mod_rs_shared(&types_dir, type_items)?;
         Ok(())
     }
 

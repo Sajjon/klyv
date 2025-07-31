@@ -108,17 +108,18 @@ impl RustFileContent {
         groups: &mut IndexMap<String, Vec<SourceItem>>,
         impl_item: &SourceItem,
     ) {
-        if let SourceItem::Impl(impl_block) = impl_item {
-            let target_type = self.extract_impl_target_type(impl_block);
+        let SourceItem::Impl(impl_block) = impl_item else {
+            return;
+        };
 
-            if let Some(type_name) = target_type {
-                let file_name = format!("{}{}", self.to_snake_case(&type_name), Self::RS_EXTENSION);
-                self.try_add_impl_to_type_file(groups, &file_name, impl_item);
-            } else {
-                // Can't determine target type, put in original file
-                self.add_item_to_original_file(groups, impl_item);
-            }
-        }
+        let Some(type_name) = self.extract_impl_target_type(impl_block) else {
+            // Can't determine target type, put in original file
+            self.add_item_to_original_file(groups, impl_item);
+            return;
+        };
+
+        let file_name = format!("{}{}", self.to_snake_case(&type_name), Self::RS_EXTENSION);
+        self.try_add_impl_to_type_file(groups, &file_name, impl_item);
     }
 
     /// Tries to add an impl block to its type file, falls back to original file
