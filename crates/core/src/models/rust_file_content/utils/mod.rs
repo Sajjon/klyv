@@ -19,8 +19,7 @@ impl RustFileContent {
         // Add items with proper spacing
         for (i, item) in items.iter().enumerate() {
             if i > 0 {
-                let spacing = self.determine_item_spacing(&items[i - 1], item);
-                content.push_str(&spacing);
+                content.push('\n');
             }
             content.push_str(&self.source_item_to_string(item));
         }
@@ -112,20 +111,6 @@ impl RustFileContent {
                 e
             ))
         })
-    }
-
-    /// Determines the appropriate spacing between two consecutive items
-    pub(super) fn determine_item_spacing(
-        &self,
-        prev_item: &SourceItem,
-        current_item: &SourceItem,
-    ) -> String {
-        match (prev_item, current_item) {
-            // Use statements should have single newlines between them
-            (SourceItem::Use(_), SourceItem::Use(_)) => "\n".to_string(),
-            // Everything else gets single newlines for better separation
-            _ => "\n".to_string(),
-        }
     }
 
     /// Convert a SourceItem back to its string representation

@@ -176,8 +176,7 @@ impl RustFileContent {
 
         for (i, item) in items.iter().enumerate() {
             if i > 0 {
-                let spacing = self.determine_item_spacing(&items[i - 1], item);
-                content.push_str(&spacing);
+                content.push('\n');
             }
 
             let item_code = self.source_item_to_string(item);
