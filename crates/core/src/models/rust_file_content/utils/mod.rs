@@ -12,10 +12,13 @@ impl RustFileContent {
         // Add prelude import at the top
         content.push_str(Self::PRELUDE_IMPORT);
 
-        // Add items with proper spacing
+        // Add items with proper spacing between different items
         for item in items {
             content.push_str(&self.source_item_to_string(item));
             content.push('\n');
+            if item.is_impl() {
+                content.push('\n');
+            }
         }
 
         content
@@ -113,7 +116,56 @@ impl RustFileContent {
         let formatted_code = self.format_token_stream(token_stream);
 
         // Convert #[doc = "..."] attributes back to /// doc comments
-        self.convert_doc_attributes_to_comments(formatted_code)
+        let doc_converted = self.convert_doc_attributes_to_comments(formatted_code);
+
+        // For impl blocks, ensure proper spacing between methods
+        if matches!(item, SourceItem::Impl(_)) {
+            self.fix_impl_method_spacing(doc_converted)
+        } else {
+            doc_converted
+        }
+    }
+
+    /// Fixes spacing between methods in impl blocks by adding blank lines where needed
+    fn fix_impl_method_spacing(&self, impl_code: String) -> String {
+        let lines: Vec<&str> = impl_code.lines().collect();
+        let mut output = Vec::new();
+        let mut brace_depth = 0;
+        let mut prev_line_was_method_end = false;
+
+        for line in lines {
+            let trimmed = line.trim();
+
+            // Count braces to track depth
+            for ch in line.chars() {
+                match ch {
+                    '{' => brace_depth += 1,
+                    '}' => brace_depth -= 1,
+                    _ => {}
+                }
+            }
+
+            // If we're at impl level (depth 1) and the previous line was a method end
+            // and this line starts a new method, add a blank line
+            if brace_depth == 1
+                && prev_line_was_method_end
+                && (trimmed.starts_with("pub fn ")
+                    || trimmed.starts_with("fn ")
+                    || trimmed.starts_with("pub async fn ")
+                    || trimmed.starts_with("async fn ")
+                    || trimmed.starts_with("/// ")
+                    || trimmed.starts_with("#["))
+            {
+                output.push(String::new()); // Add blank line
+            }
+
+            output.push(line.to_string());
+
+            // Check if this line ends a method (closing brace at impl level)
+            prev_line_was_method_end = brace_depth == 1 && trimmed == "}";
+        }
+
+        output.join("\n")
     }
 
     /// Checks if an item is a type (struct, enum, trait, type alias, union, impl)

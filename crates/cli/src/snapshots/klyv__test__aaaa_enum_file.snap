@@ -20,6 +20,7 @@ impl AaaaEnum {
     pub fn magic() -> u8 {
         42
     }
+
     /// More magic
     /// Very good number
     /// 42 is magic

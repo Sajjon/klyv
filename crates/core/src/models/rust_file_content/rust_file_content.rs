@@ -76,7 +76,7 @@ impl RustFileContent {
             debug!("Detected main.rs special case");
             return self.handle_main_rs_special_case(base_path);
         }
-
+        debug!("Non main.rs or lib.rs case, using standard file splitting");
         // Use standard file splitting for regular files
         self.handle_standard_file_splitting(base_path)
     }
@@ -178,10 +178,18 @@ impl RustFileContent {
     fn build_file_content(&self, items: &[SourceItem]) -> String {
         let mut content = String::new();
 
+        let mut last_item: Option<&SourceItem> = None;
         for item in items {
             let item_code = self.source_item_to_string(item);
             content.push_str(&item_code);
             content.push('\n');
+            if let Some(last) = last_item {
+                // Add an extra newline if the last item was an impl block
+                if last.is_impl() && item.is_impl() {
+                    content.push('\n');
+                }
+            }
+            last_item = Some(item);
         }
 
         content
