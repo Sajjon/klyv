@@ -136,7 +136,23 @@ impl RustFileContent {
         for line in lines {
             let trimmed = line.trim();
 
-            // Count braces to track depth
+            // Check if this line starts a new method or has documentation/attributes BEFORE updating brace depth
+            let is_method_start = trimmed.starts_with("pub fn ")
+                || trimmed.starts_with("fn ")
+                || trimmed.starts_with("pub async fn ")
+                || trimmed.starts_with("async fn ");
+
+            let is_doc_or_attr = trimmed.starts_with("/// ") || trimmed.starts_with("#[");
+
+            // If we're at impl level (depth 1) and the previous line was a method end
+            // and this line starts a new method or is documentation/attributes for a method, add a blank line
+            if (is_method_start || is_doc_or_attr) && brace_depth == 1 && prev_line_was_method_end {
+                output.push(String::new()); // Add blank line
+            }
+
+            output.push(line.to_string());
+
+            // Count braces to track depth AFTER processing the line
             for ch in line.chars() {
                 match ch {
                     '{' => brace_depth += 1,
@@ -145,23 +161,8 @@ impl RustFileContent {
                 }
             }
 
-            // If we're at impl level (depth 1) and the previous line was a method end
-            // and this line starts a new method, add a blank line
-            if brace_depth == 1
-                && prev_line_was_method_end
-                && (trimmed.starts_with("pub fn ")
-                    || trimmed.starts_with("fn ")
-                    || trimmed.starts_with("pub async fn ")
-                    || trimmed.starts_with("async fn ")
-                    || trimmed.starts_with("/// ")
-                    || trimmed.starts_with("#["))
-            {
-                output.push(String::new()); // Add blank line
-            }
-
-            output.push(line.to_string());
-
             // Check if this line ends a method (closing brace at impl level)
+            // We need to check if we just closed a method body (went from depth 2 to 1)
             prev_line_was_method_end = brace_depth == 1 && trimmed == "}";
         }
 

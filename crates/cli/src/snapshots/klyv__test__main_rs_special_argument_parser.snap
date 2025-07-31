@@ -16,6 +16,7 @@ impl ArgumentParser {
             args: env::args().collect(),
         }
     }
+
     pub fn parse(&self) -> Result<CliConfig, String> {
         let mut config = CliConfig::new();
         Ok(config)

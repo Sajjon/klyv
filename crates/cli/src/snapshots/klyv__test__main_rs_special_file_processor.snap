@@ -14,9 +14,11 @@ impl FileProcessor {
     pub fn new() -> Self {
         Self { cache: IndexMap::new() }
     }
+
     pub fn process_file(&mut self, path: &PathBuf) -> Result<String, ProcessingError> {
         Ok(format!("Processed: {}", path.display()))
     }
+
     pub fn get_cache_size(&self) -> usize {
         self.cache.len()
     }

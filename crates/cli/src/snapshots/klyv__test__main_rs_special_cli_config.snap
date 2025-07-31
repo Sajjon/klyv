@@ -20,6 +20,7 @@ impl CliConfig {
             input_files: Vec::new(),
         }
     }
+
     pub fn with_verbose(mut self, verbose: bool) -> Self {
         self.verbose = verbose;
         self

@@ -280,3 +280,47 @@ fn test_main_rs_special_case_handling() {
         "main_rs_special_document_metrics",
     );
 }
+
+#[test]
+fn test_impl_method_spacing_issue() {
+    let mut source_path = env::current_dir().unwrap();
+    source_path.push("src/fixtures/impl_spacing_test/lib.rs");
+
+    // Use a temporary directory that will be cleaned up automatically
+    let temp_dir = TempDir::new().unwrap();
+    let out_path = temp_dir.path().to_path_buf();
+
+    let input = Input::builder()
+        .source(source_path.to_path_buf())
+        .maybe_out(Some(out_path.clone()))
+        .allow_git_dirty(true)
+        .allow_git_staged(true)
+        .build();
+
+    let _tree = run(input).unwrap();
+
+    // Check the my_struct.rs file which should have an impl block with multiple methods
+    let my_struct_file_path = out_path.join("types/my_struct.rs");
+    assert!(
+        my_struct_file_path.exists(),
+        "types/my_struct.rs should exist"
+    );
+
+    let content =
+        fs::read_to_string(&my_struct_file_path).expect("Should be able to read my_struct.rs file");
+
+    // This test should show that methods in impl blocks are missing blank lines between them
+    // The impl MyStruct block has `new` and `display` methods that should be separated by blank lines
+    insta::assert_snapshot!("impl_method_spacing_my_struct_file", content);
+
+    // Also check my_enum.rs which has multiple methods that should be spaced
+    let my_enum_file_path = out_path.join("types/my_enum.rs");
+    assert!(my_enum_file_path.exists(), "types/my_enum.rs should exist");
+
+    let enum_content =
+        fs::read_to_string(&my_enum_file_path).expect("Should be able to read my_enum.rs file");
+
+    // The impl MyEnum block has magic_self, magic_mut_self, and magic methods
+    // that should be separated by blank lines
+    insta::assert_snapshot!("impl_method_spacing_my_enum_file", enum_content);
+}
