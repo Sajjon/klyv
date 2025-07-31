@@ -55,19 +55,24 @@ fn test() {
     insta::assert_yaml_snapshot!("generated_directory_structure", dir_structure);
 }
 
+/// Asserts that a generated file matches its snapshot
+/// Using early return to handle file existence check immediately
 fn assert_generated_file_snapshot(
     base_path: &std::path::Path,
     relative_path: &str,
     snapshot_name: &str,
 ) {
     let file_path = base_path.join(relative_path);
-    if file_path.exists() {
-        let content = fs::read_to_string(&file_path)
-            .unwrap_or_else(|_| panic!("Failed to read file: {}", file_path.display()));
-        insta::assert_snapshot!(snapshot_name, content);
-    } else {
+
+    // Early return if file doesn't exist - fail the test
+    if !file_path.exists() {
         panic!("Expected file not found: {}", file_path.display());
     }
+
+    // File exists - read content and assert snapshot
+    let content = fs::read_to_string(&file_path)
+        .unwrap_or_else(|_| panic!("Failed to read file: {}", file_path.display()));
+    insta::assert_snapshot!(snapshot_name, content);
 }
 
 fn collect_directory_structure(dir: &std::path::Path) -> Vec<String> {

@@ -40,6 +40,7 @@ impl RustFileContent {
     /// Attempts to convert a doc attribute at the given position
     fn try_convert_doc_attribute(&self, chars: &[char], start_pos: usize) -> Option<DocConversion> {
         if !self.starts_with_hash(chars, start_pos) {
+            // Not starting with #, can't be a doc attribute
             return None;
         }
 
@@ -78,6 +79,7 @@ impl RustFileContent {
     /// Extracts content from a doc attribute if found
     fn extract_doc_attribute_content(&self, chars: &[char], pos: usize) -> Option<DocContent> {
         if pos + 8 >= chars.len() || chars[pos] != '[' {
+            // Not enough characters or doesn't start with '['
             return None;
         }
 
@@ -86,6 +88,7 @@ impl RustFileContent {
             .iter()
             .collect();
         if !slice.starts_with(Self::DOC_ATTR_PREFIX) {
+            // Doesn't match doc attribute pattern
             return None;
         }
 
@@ -107,14 +110,15 @@ impl RustFileContent {
         pos: usize,
         content: String,
     ) -> Option<DocContent> {
-        if pos < chars.len() && chars[pos] == ']' {
-            Some(DocContent {
-                content,
-                end_position: pos + 1,
-            })
-        } else {
-            None // No closing bracket found
+        if pos >= chars.len() || chars[pos] != ']' {
+            // No closing bracket found
+            return None;
         }
+
+        Some(DocContent {
+            content,
+            end_position: pos + 1,
+        })
     }
 
     /// Extracts content until the closing quote
@@ -133,9 +137,10 @@ impl RustFileContent {
         }
 
         if pos >= chars.len() || chars[pos] != '"' {
-            None // No closing quote found
-        } else {
-            Some((content, pos + 1)) // Return content and position after quote
+            // No closing quote found
+            return None;
         }
+
+        Some((content, pos + 1)) // Return content and position after quote
     }
 }

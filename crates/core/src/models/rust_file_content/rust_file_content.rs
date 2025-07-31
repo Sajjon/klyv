@@ -69,14 +69,16 @@ impl RustFileContent {
         // Check if this is a special lib.rs case
         if self.is_lib_rs_special_case() {
             debug!("Detected lib.rs special case");
-            self.handle_lib_rs_special_case(base_path)?;
-        } else if self.is_main_rs_special_case() {
-            debug!("Detected main.rs special case");
-            self.handle_main_rs_special_case(base_path)?;
-        } else {
-            self.handle_standard_file_splitting(base_path)?;
+            return self.handle_lib_rs_special_case(base_path);
         }
-        Ok(())
+
+        if self.is_main_rs_special_case() {
+            debug!("Detected main.rs special case");
+            return self.handle_main_rs_special_case(base_path);
+        }
+
+        // Use standard file splitting for regular files
+        self.handle_standard_file_splitting(base_path)
     }
 
     /// Handles standard file splitting logic for regular files
@@ -101,11 +103,13 @@ impl RustFileContent {
 
     /// Creates the output directory if it doesn't exist
     fn ensure_output_directory_exists(&self, base_path: &Path) -> Result<()> {
-        if let Some(parent) = base_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| Error::bail(format!("Failed to create directory: {}", e)))?;
-        }
-        Ok(())
+        let Some(parent) = base_path.parent() else {
+            // No parent directory, nothing to create
+            return Ok(());
+        };
+
+        std::fs::create_dir_all(parent)
+            .map_err(|e| Error::bail(format!("Failed to create directory: {}", e)))
     }
 
     /// Determines the output directory based on the base path
@@ -146,22 +150,22 @@ impl RustFileContent {
     fn handle_original_file_path(&self, base_path: &Path) -> PathBuf {
         if base_path.is_dir() {
             // If output is a directory, place the original file in it
-            base_path.join(self.content().name())
-        } else {
-            // If output is a file path, use it directly
-            base_path.to_path_buf()
+            return base_path.join(self.content().name());
         }
+
+        // If output is a file path, use it directly
+        base_path.to_path_buf()
     }
 
     /// Creates a path for split files
     fn create_split_file_path(&self, base_path: &Path, file_name: &str) -> PathBuf {
         if base_path.is_dir() {
             // If output is a directory, place the new file in it
-            base_path.join(file_name)
-        } else {
-            // If output is a file path, replace the file name component
-            base_path.with_file_name(file_name)
+            return base_path.join(file_name);
         }
+
+        // If output is a file path, replace the file name component
+        base_path.with_file_name(file_name)
     }
 
     /// Helper method to write a collection of items to a file
@@ -220,18 +224,19 @@ impl RustFileContent {
 
     /// Reads existing module declarations from mod.rs if it exists
     fn read_existing_modules(&self, mod_file_path: &Path) -> Result<Vec<String>> {
-        if mod_file_path.exists() {
-            let content = std::fs::read_to_string(mod_file_path).map_err(|e| {
-                Error::bail(format!(
-                    "Failed to read mod.rs file {}: {}",
-                    mod_file_path.display(),
-                    e
-                ))
-            })?;
-            Ok(self.parse_module_declarations(&content))
-        } else {
-            Ok(vec![])
+        if !mod_file_path.exists() {
+            // No existing mod.rs file to read from
+            return Ok(vec![]);
         }
+
+        let content = std::fs::read_to_string(mod_file_path).map_err(|e| {
+            Error::bail(format!(
+                "Failed to read mod.rs file {}: {}",
+                mod_file_path.display(),
+                e
+            ))
+        })?;
+        Ok(self.parse_module_declarations(&content))
     }
 
     /// Parses mod declarations from file content
@@ -240,11 +245,12 @@ impl RustFileContent {
             .lines()
             .filter_map(|line| {
                 let trimmed = line.trim();
-                if trimmed.starts_with(Self::MOD_PREFIX) && trimmed.ends_with(';') {
-                    Some(trimmed[4..trimmed.len() - 1].to_string())
-                } else {
-                    None
+                if !trimmed.starts_with(Self::MOD_PREFIX) || !trimmed.ends_with(';') {
+                    // Skip lines that aren't mod declarations
+                    return None;
                 }
+
+                Some(trimmed[4..trimmed.len() - 1].to_string())
             })
             .collect()
     }

@@ -62,12 +62,18 @@ fn init_logging_with_level_str(log_level: &str) {
 // Setup logging once
 use std::sync::Once;
 static INIT: Once = Once::new();
+
+/// Initializes logging based on environment variable or default level
+/// Using early return to handle environment variable presence immediately
 fn init_logging_inner() {
+    // Early return if RUST_LOG environment variable is set
     if let Ok(log_level) = std::env::var(RUST_LOG_ENV) {
         init_logging_with_level_str(&log_level);
-    } else {
-        init_logging_with_level(log::LevelFilter::Info);
+        return;
     }
+
+    // Default logging level when no environment variable is set
+    init_logging_with_level(log::LevelFilter::Info);
 }
 
 /// # Panics

@@ -129,23 +129,29 @@ impl RustFileContent {
         file_name: &str,
         impl_item: &SourceItem,
     ) {
-        if groups.contains_key(file_name) {
-            groups.get_mut(file_name).unwrap().push(impl_item.clone());
-        } else {
+        if !groups.contains_key(file_name) {
             // Type file doesn't exist, put in original file
             self.add_item_to_original_file(groups, impl_item);
+            return;
         }
+
+        groups.get_mut(file_name).unwrap().push(impl_item.clone());
     }
 
     /// Extract the target type name from an impl block
     pub(super) fn extract_impl_target_type(&self, impl_block: &syn::ItemImpl) -> Option<String> {
         // Handle impl blocks like "impl SomeType" or "impl SomeTrait for SomeType"
-        if let syn::Type::Path(type_path) = impl_block.self_ty.as_ref() {
-            if let Some(segment) = type_path.path.segments.last() {
-                return Some(segment.ident.to_string());
-            }
-        }
-        None
+        let syn::Type::Path(type_path) = impl_block.self_ty.as_ref() else {
+            // Not a path type, can't extract name
+            return None;
+        };
+
+        let Some(segment) = type_path.path.segments.last() else {
+            // No segments in path
+            return None;
+        };
+
+        Some(segment.ident.to_string())
     }
 
     /// Collects all impl blocks from the items
@@ -162,11 +168,17 @@ impl RustFileContent {
         &self,
         groups: &mut IndexMap<String, Vec<SourceItem>>,
     ) {
-        if let Some(original_items) = groups.get(self.content().name()) {
-            if original_items.is_empty() {
-                groups.shift_remove(self.content().name());
-            }
+        let Some(original_items) = groups.get(self.content().name()) else {
+            // No original file entry exists
+            return;
+        };
+
+        if !original_items.is_empty() {
+            // Original file has items, keep it
+            return;
         }
+
+        groups.shift_remove(self.content().name());
     }
 
     /// Extracts the type name from various SourceItem types

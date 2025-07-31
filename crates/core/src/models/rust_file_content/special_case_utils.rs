@@ -70,17 +70,19 @@ impl RustFileContent {
         base_path: &Path,
         config: &SpecialCaseConfig,
     ) -> Result<()> {
-        if !logic_items.is_empty() {
-            let output_dir = self.determine_output_directory(base_path);
-            let logic_dir = output_dir.join(config.logic_folder);
-            std::fs::create_dir_all(&logic_dir)
-                .map_err(|e| Error::bail(format!("Failed to create logic directory: {}", e)))?;
-
-            // Write logic items to individual files (functions.rs, macro_name.rs, etc.)
-            self.write_logic_items_shared(logic_items, &logic_dir, config.logic_category)?;
-            self.create_logic_mod_rs_shared(&logic_dir, logic_items)?;
+        if logic_items.is_empty() {
+            // No logic items to process
+            return Ok(());
         }
-        Ok(())
+
+        let output_dir = self.determine_output_directory(base_path);
+        let logic_dir = output_dir.join(config.logic_folder);
+        std::fs::create_dir_all(&logic_dir)
+            .map_err(|e| Error::bail(format!("Failed to create logic directory: {}", e)))?;
+
+        // Write logic items to individual files (functions.rs, macro_name.rs, etc.)
+        self.write_logic_items_shared(logic_items, &logic_dir, config.logic_category)?;
+        self.create_logic_mod_rs_shared(&logic_dir, logic_items)
     }
 
     /// Shared logic for writing logic items (functions and macros) to individual files
@@ -113,21 +115,27 @@ impl RustFileContent {
 
         // Write each macro to its own file with #[macro_export]
         for item in &macros {
-            if let SourceItem::MacroRules(macro_item) = item {
-                if let Some(ident) = &macro_item.ident {
-                    let macro_name = ident.to_string();
-                    let macro_file = dir.join(format!("{}.rs", macro_name));
+            let SourceItem::MacroRules(macro_item) = item else {
+                // Not a macro, skip
+                continue;
+            };
 
-                    // Build content with #[macro_export] attribute
-                    let mut content = String::new();
-                    content.push_str(Self::PRELUDE_IMPORT);
-                    content.push_str("#[macro_export]\n");
-                    content.push_str(&self.source_item_to_string(item));
-                    content.push('\n');
+            let Some(ident) = &macro_item.ident else {
+                // No identifier, can't create file
+                continue;
+            };
 
-                    self.write_content_to_file(&content, &macro_file)?;
-                }
-            }
+            let macro_name = ident.to_string();
+            let macro_file = dir.join(format!("{}.rs", macro_name));
+
+            // Build content with #[macro_export] attribute
+            let mut content = String::new();
+            content.push_str(Self::PRELUDE_IMPORT);
+            content.push_str("#[macro_export]\n");
+            content.push_str(&self.source_item_to_string(item));
+            content.push('\n');
+
+            self.write_content_to_file(&content, &macro_file)?;
         }
 
         Ok(())
@@ -163,18 +171,26 @@ impl RustFileContent {
 
         // Add module names for each macro (they get individual files)
         for item in items {
-            if let SourceItem::MacroRules(macro_item) = item {
-                if let Some(ident) = &macro_item.ident {
-                    module_names.push(ident.to_string());
-                }
-            }
+            let SourceItem::MacroRules(macro_item) = item else {
+                // Not a macro, skip
+                continue;
+            };
+
+            let Some(ident) = &macro_item.ident else {
+                // No identifier, skip
+                continue;
+            };
+
+            module_names.push(ident.to_string());
         }
 
-        if !module_names.is_empty() {
-            module_names.sort();
-            self.write_mod_file_content(&logic_dir.join(Self::MOD_RS), module_names)?;
+        if module_names.is_empty() {
+            // No modules to write
+            return Ok(());
         }
-        Ok(())
+
+        module_names.sort();
+        self.write_mod_file_content(&logic_dir.join(Self::MOD_RS), module_names)
     }
 
     /// Shared logic for creating main file with prelude module structure
@@ -217,21 +233,24 @@ impl RustFileContent {
         }
 
         // Add remaining items (use statements, main function, etc.)
-        if !main_items.is_empty() {
-            if has_types || has_logic {
-                content.push('\n');
-            }
-            for item in main_items {
-                content.push_str(&self.source_item_to_string(item));
+        if main_items.is_empty() {
+            // No main items to add
+            return self.write_content_to_file(&content, &main_file_path);
+        }
 
-                // No empty lines between `use` statements
-                if !item.is_use() {
-                    content.push('\n');
-                }
+        if has_types || has_logic {
+            content.push('\n');
+        }
+
+        for item in main_items {
+            content.push_str(&self.source_item_to_string(item));
+
+            // No empty lines between `use` statements
+            if !item.is_use() {
+                content.push('\n');
             }
         }
 
-        self.write_content_to_file(&content, &main_file_path)?;
-        Ok(())
+        self.write_content_to_file(&content, &main_file_path)
     }
 }

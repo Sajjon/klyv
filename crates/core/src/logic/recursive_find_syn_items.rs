@@ -156,15 +156,19 @@ fn validate_path_exists(path: &Path) -> Result<()> {
 }
 
 /// Determines path type (file/directory) and calls appropriate parser
+/// Using early returns to handle different path types immediately
 fn determine_path_type_and_parse(path: PathBuf) -> Result<FileSystemNode> {
+    // Early return for files
     if path.is_file() {
         return parse_rust_file().path(path).call();
     }
 
+    // Early return for directories
     if path.is_dir() {
         return scan_directory().path(path).call();
     }
 
+    // Neither file nor directory - return error
     Err(Error::bail(format!(
         "Invalid path type: {}",
         path.display()
@@ -264,9 +268,11 @@ fn process_directory_entries(entries: fs::ReadDir) -> Vec<FileSystemNode> {
 }
 
 /// Processes a single directory entry
+/// Using early return to avoid nesting when handling directory entry errors
 fn process_single_directory_entry(
     entry: Result<fs::DirEntry, std::io::Error>,
 ) -> Option<FileSystemNode> {
+    // Early return if directory entry reading failed
     let entry = handle_directory_entry_error(entry)?;
     let entry_path = entry.path();
 
@@ -274,27 +280,37 @@ fn process_single_directory_entry(
 }
 
 /// Handles errors when reading directory entries
+/// Using early return to handle error cases immediately
 fn handle_directory_entry_error(
     entry: Result<fs::DirEntry, std::io::Error>,
 ) -> Option<fs::DirEntry> {
-    match entry {
-        Ok(e) => Some(e),
-        Err(e) => {
-            warn!("Warning: Failed to read directory entry: {}", e);
-            None
-        }
-    }
+    // Early return error case with warning
+    let Ok(entry) = entry else {
+        warn!(
+            "Warning: Failed to read directory entry: {}",
+            entry.unwrap_err()
+        );
+        return None;
+    };
+
+    Some(entry)
 }
 
 /// Classifies path type and calls appropriate parser
+/// Using early returns to handle different path types immediately
 fn classify_and_parse_path(entry_path: PathBuf) -> Option<FileSystemNode> {
+    // Early return for directories
     if entry_path.is_dir() {
-        scan_directory().path(entry_path).call().ok()
-    } else if is_rust_file(&entry_path) {
-        parse_rust_file().path(entry_path).call().ok()
-    } else {
-        None
+        return scan_directory().path(entry_path).call().ok();
     }
+
+    // Early return for Rust files
+    if is_rust_file(&entry_path) {
+        return parse_rust_file().path(entry_path).call().ok();
+    }
+
+    // Default: not a supported file type
+    None
 }
 
 /// Checks if a path is a Rust file

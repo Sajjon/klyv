@@ -77,14 +77,23 @@ impl PartialOrd for FileSystemNode {
 }
 
 impl Ord for FileSystemNode {
+    /// Custom ordering to sort directories before files, then by name
+    /// Using early returns to handle directory precedence immediately
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let self_is_dir = matches!(self, FileSystemNode::Directory { .. });
         let other_is_dir = matches!(other, FileSystemNode::Directory { .. });
 
-        match (self_is_dir, other_is_dir) {
-            (true, false) => std::cmp::Ordering::Less, // Directories come first
-            (false, true) => std::cmp::Ordering::Greater, // Files come after directories
-            _ => self.name().cmp(other.name()),        // Same type: sort by name
+        // Early return: directories come before files
+        if self_is_dir && !other_is_dir {
+            return std::cmp::Ordering::Less;
         }
+
+        // Early return: files come after directories
+        if !self_is_dir && other_is_dir {
+            return std::cmp::Ordering::Greater;
+        }
+
+        // Same type: sort by name
+        self.name().cmp(other.name())
     }
 }
