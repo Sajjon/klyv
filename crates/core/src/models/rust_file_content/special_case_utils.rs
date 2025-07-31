@@ -4,9 +4,6 @@ use crate::prelude::*;
 pub struct SpecialCaseConfig {
     pub types_folder: &'static str,
     pub logic_folder: &'static str,
-    pub types_category: &'static str,
-    pub logic_category: &'static str,
-    pub module_name: &'static str,
 }
 
 impl SpecialCaseConfig {
@@ -15,9 +12,6 @@ impl SpecialCaseConfig {
         Self {
             types_folder: RustFileContent::FOLDER_TYPES,
             logic_folder: RustFileContent::FOLDER_LOGIC,
-            types_category: RustFileContent::CATEGORY_TYPES,
-            logic_category: RustFileContent::CATEGORY_LOGIC,
-            module_name: "types",
         }
     }
 
@@ -26,9 +20,6 @@ impl SpecialCaseConfig {
         Self {
             types_folder: RustFileContent::FOLDER_TYPES,
             logic_folder: RustFileContent::FOLDER_LOGIC,
-            types_category: RustFileContent::CATEGORY_TYPES,
-            logic_category: RustFileContent::CATEGORY_LOGIC,
-            module_name: "models",
         }
     }
 }
@@ -55,7 +46,7 @@ impl RustFileContent {
 
         for (file_name, group_items) in grouped_items {
             let target_file = types_dir.join(&file_name);
-            let content = self.build_organized_file_content(&group_items, config.types_category);
+            let content = self.build_organized_file_content(&group_items);
             self.write_content_to_file(&content, &target_file)?;
         }
 
@@ -81,17 +72,12 @@ impl RustFileContent {
             .map_err(|e| Error::bail(format!("Failed to create logic directory: {}", e)))?;
 
         // Write logic items to individual files (functions.rs, macro_name.rs, etc.)
-        self.write_logic_items_shared(logic_items, &logic_dir, config.logic_category)?;
+        self.write_logic_items_shared(logic_items, &logic_dir)?;
         self.create_logic_mod_rs_shared(&logic_dir, logic_items)
     }
 
     /// Shared logic for writing logic items (functions and macros) to individual files
-    pub(super) fn write_logic_items_shared(
-        &self,
-        items: &[SourceItem],
-        dir: &Path,
-        category: &str,
-    ) -> Result<()> {
+    pub(super) fn write_logic_items_shared(&self, items: &[SourceItem], dir: &Path) -> Result<()> {
         // Separate functions and macros
         let mut functions = Vec::new();
         let mut macros = Vec::new();
@@ -109,7 +95,7 @@ impl RustFileContent {
         // Write functions to functions.rs if any exist
         if !functions.is_empty() {
             let functions_file = dir.join(Self::FUNCTIONS_RS);
-            let content = self.build_organized_file_content(&functions, category);
+            let content = self.build_organized_file_content(&functions);
             self.write_content_to_file(&content, &functions_file)?;
         }
 
@@ -201,7 +187,6 @@ impl RustFileContent {
         has_types: bool,
         has_logic: bool,
         main_items: &[SourceItem],
-        config: &SpecialCaseConfig,
     ) -> Result<()> {
         let main_file_path = if base_path.is_file() {
             base_path.to_path_buf()
@@ -213,7 +198,7 @@ impl RustFileContent {
 
         // Add module declarations
         if has_types {
-            content.push_str(&format!("mod {};\n", config.module_name));
+            content.push_str(&format!("mod {};\n", Self::FOLDER_TYPES));
         }
         if has_logic {
             content.push_str("mod logic;\n");
@@ -223,7 +208,7 @@ impl RustFileContent {
         if has_types || has_logic {
             content.push_str("\npub mod prelude {\n");
             if has_types {
-                content.push_str(&format!("    pub use crate::{}::*;\n", config.module_name));
+                content.push_str(&format!("    pub use crate::{}::*;\n", Self::FOLDER_TYPES));
             }
             if has_logic {
                 content.push_str("    pub use crate::logic::*;\n");

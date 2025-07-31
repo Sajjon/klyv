@@ -2,11 +2,11 @@
 source: crates/cli/src/test.rs
 expression: content
 ---
-mod models;
+mod types;
 mod logic;
 
 pub mod prelude {
-    pub use crate::models::*;
+    pub use crate::types::*;
     pub use crate::logic::*;
 }
 

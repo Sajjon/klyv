@@ -38,7 +38,6 @@ impl RustFileContent {
             !type_items.is_empty(),
             !logic_items.is_empty(),
             &main_items,
-            &config,
         )?;
 
         Ok(())

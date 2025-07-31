@@ -6,11 +6,7 @@ use crate::prelude::*;
 
 impl RustFileContent {
     /// Builds file content for organized items with proper prelude import
-    pub(super) fn build_organized_file_content(
-        &self,
-        items: &[SourceItem],
-        _category: &str,
-    ) -> String {
+    pub(super) fn build_organized_file_content(&self, items: &[SourceItem]) -> String {
         let mut content = String::new();
 
         // Add prelude import at the top
