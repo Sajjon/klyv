@@ -2,6 +2,8 @@
 source: crates/cli/src/test.rs
 expression: content
 ---
+use crate::prelude::*;
+
 use std::str::FromStr;
 
 /// Doc about AaaaStructB
@@ -17,6 +19,7 @@ impl AaaaStructB {
         42
     }
 }
+
 impl AaaaStructB {
     /// Magic self
     pub fn magic_self(self) -> u8 {

@@ -4,7 +4,4 @@ expression: content
 ---
 use crate::prelude::*;
 
-/// Global magic
-pub fn global_magic() -> u8 {
-    237
-}
+pub type Magic = u8;

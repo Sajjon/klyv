@@ -1,0 +1,12 @@
+---
+source: crates/cli/src/test.rs
+expression: content
+---
+use crate::prelude::*;
+
+/// Doc about AbAStructA
+#[derive(Clone, Debug)]
+pub struct AbAStructA<T> {
+    /// Doc about phantom
+    phantom: PhantomData<T>,
+}

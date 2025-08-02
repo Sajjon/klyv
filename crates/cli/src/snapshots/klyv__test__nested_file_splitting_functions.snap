@@ -1,0 +1,9 @@
+---
+source: crates/cli/src/test.rs
+expression: functions_content
+---
+use crate::prelude::*;
+
+pub fn global_deep_frobnicate() {
+    println!("Global frobnicate function called");
+}

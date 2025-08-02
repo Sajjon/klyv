@@ -47,7 +47,10 @@ fn test() {
         "d0_a/d1_a/d2_a/magic_trait.rs",
         "magic_trait_file",
     );
-    assert_generated_file_snapshot(&out_path, "d0_a/d1_b/d2_a.rs", "d2_a_mixed_content");
+    // d2_a.rs is now split into separate files - test each part
+    assert_generated_file_snapshot(&out_path, "d0_a/d1_b/magic.rs", "magic_type_file");
+    assert_generated_file_snapshot(&out_path, "d0_a/d1_b/ab_astruct_a.rs", "ab_astruct_a_file");
+    assert_generated_file_snapshot(&out_path, "d0_a/d1_b/functions.rs", "d2_a_mixed_content");
     assert_generated_file_snapshot(&out_path, "d0_a/d1_a/d2_b.rs", "d2_b_global_magic");
 
     // Assert directory structure snapshot
@@ -323,4 +326,47 @@ fn test_impl_method_spacing_issue() {
     // The impl MyEnum block has magic_self, magic_mut_self, and magic methods
     // that should be separated by blank lines
     insta::assert_snapshot!("impl_method_spacing_my_enum_file", enum_content);
+}
+
+#[test]
+fn test_nested_file_splitting() {
+    let mut source_path = env::current_dir().unwrap();
+    source_path.push("src/fixtures/nested_structure_test/deeply_nested/a/b/c/d/foo.rs");
+
+    // Use a temporary directory that will be cleaned up automatically
+    let temp_dir = TempDir::new().unwrap();
+    let out_path = temp_dir.path().to_path_buf();
+
+    let input = Input::builder()
+        .source(source_path.to_path_buf())
+        .maybe_out(Some(out_path.clone()))
+        .allow_git_dirty(true)
+        .allow_git_staged(true)
+        .build();
+
+    let _result = run(input).unwrap();
+
+    // Check that files are properly organized
+    let functions_file = out_path.join("functions.rs");
+    let deep_foo_file = out_path.join("deep_foo.rs");
+    let deep_foobar_file = out_path.join("deep_foobar.rs");
+    let mod_file = out_path.join("mod.rs");
+
+    // Verify the files exist
+    assert!(functions_file.exists(), "functions.rs should exist");
+    assert!(deep_foo_file.exists(), "deep_foo.rs should exist");
+    assert!(deep_foobar_file.exists(), "deep_foobar.rs should exist");
+    assert!(mod_file.exists(), "mod.rs should exist");
+
+    // Check contents
+    let functions_content =
+        fs::read_to_string(&functions_file).expect("Should be able to read functions.rs");
+    insta::assert_snapshot!("nested_file_splitting_functions", functions_content);
+
+    let deep_foo_content =
+        fs::read_to_string(&deep_foo_file).expect("Should be able to read deep_foo.rs");
+    insta::assert_snapshot!("nested_file_splitting_deep_foo", deep_foo_content);
+
+    let mod_content = fs::read_to_string(&mod_file).expect("Should be able to read mod.rs");
+    insta::assert_snapshot!("nested_file_splitting_mod", mod_content);
 }

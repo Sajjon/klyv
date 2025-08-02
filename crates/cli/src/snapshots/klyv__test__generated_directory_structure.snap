@@ -13,9 +13,10 @@ expression: dir_structure
 - d0_a/d1_a/d2_b.rs
 - d0_a/d1_a/mod.rs
 - d0_a/d1_b/ab_astruct_a.rs
-- d0_a/d1_b/d2_a.rs
+- d0_a/d1_b/functions.rs
 - d0_a/d1_b/magic.rs
 - d0_a/d1_b/mod.rs
+- d0_a/d1_b/other.rs
 - d0_a/d1_c/ac_union_a.rs
 - d0_a/mod.rs
 - d0_b/d1_a/mod.rs

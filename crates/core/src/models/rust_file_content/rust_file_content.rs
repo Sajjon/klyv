@@ -83,20 +83,176 @@ impl RustFileContent {
 
     /// Handles standard file splitting logic for regular files
     fn handle_standard_file_splitting(&self, base_path: &Path) -> Result<()> {
-        // Standard file splitting logic
+        // Apply the same categorization logic as special cases
         let items = self.content().items();
-        let grouped_items = self.group_items_by_target_file(items);
+        let (type_items, logic_items, other_items) = self.categorize_regular_file_items(items);
 
-        debug!("Found {} item groups", grouped_items.len());
+        debug!(
+            "Found {} type items, {} logic items, {} other items",
+            type_items.len(),
+            logic_items.len(),
+            other_items.len()
+        );
 
-        self.process_and_write_grouped_items(base_path)?;
+        // Determine the directory where files should be written
+        let output_dir = self.determine_output_directory(base_path);
 
-        // Update mod.rs if multiple files were created
-        if grouped_items.len() > 1 {
-            debug!("Multiple files created, updating mod.rs");
-            self.update_mod_file(base_path, &grouped_items)?;
-        } else {
-            debug!("Only one file, skipping mod.rs update");
+        // If we have both types and logic, organize like special cases
+        if !type_items.is_empty() && !logic_items.is_empty() {
+            // Create organized structure with categorized items
+            self.create_organized_structure_for_regular_file(
+                &output_dir,
+                &type_items,
+                &logic_items,
+                &other_items,
+            )?;
+        } else if !type_items.is_empty() || !logic_items.is_empty() || !other_items.is_empty() {
+            // Fall back to traditional grouping for simpler cases
+            let grouped_items = self.group_items_by_target_file(items);
+            self.write_grouped_items_to_directory(&output_dir, &grouped_items)?;
+
+            // Update mod.rs if multiple files were created
+            if grouped_items.len() > 1 {
+                debug!("Multiple files created, updating mod.rs");
+                self.update_mod_file(base_path, &grouped_items)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Categorizes items for regular files using the same logic as special cases
+    fn categorize_regular_file_items(
+        &self,
+        items: &[SourceItem],
+    ) -> (Vec<SourceItem>, Vec<SourceItem>, Vec<SourceItem>) {
+        let mut type_items = Vec::new();
+        let mut logic_items = Vec::new();
+        let mut other_items = Vec::new();
+
+        for item in items {
+            match item {
+                SourceItem::Function(_) | SourceItem::MacroRules(_) => {
+                    logic_items.push(item.clone())
+                }
+                _ if self.is_type_item(item) => type_items.push(item.clone()),
+                _ => other_items.push(item.clone()),
+            }
+        }
+
+        (type_items, logic_items, other_items)
+    }
+
+    /// Creates organized structure for regular files that have both types and logic
+    fn create_organized_structure_for_regular_file(
+        &self,
+        output_dir: &Path,
+        type_items: &[SourceItem],
+        logic_items: &[SourceItem],
+        other_items: &[SourceItem],
+    ) -> Result<()> {
+        // Write type items using the same logic as special cases
+        if !type_items.is_empty() {
+            let grouped_type_items = self.group_items_by_target_file(type_items);
+            self.write_grouped_items_to_directory(output_dir, &grouped_type_items)?;
+        }
+
+        // Write logic items (functions to functions.rs, macros to individual files)
+        if !logic_items.is_empty() {
+            self.write_logic_items_shared(logic_items, output_dir)?;
+        }
+
+        // Write other items to a separate file in output directory if they exist
+        if !other_items.is_empty() {
+            let other_file_path = output_dir.join("other.rs");
+            let content = self.build_organized_file_content(other_items);
+            self.write_content_to_file(&content, &other_file_path)?;
+        }
+
+        // Create mod.rs with all the modules
+        self.create_comprehensive_mod_file(output_dir, type_items, logic_items)?;
+
+        Ok(())
+    }
+
+    /// Creates a comprehensive mod.rs file that includes both type and logic modules
+    fn create_comprehensive_mod_file(
+        &self,
+        output_dir: &Path,
+        type_items: &[SourceItem],
+        logic_items: &[SourceItem],
+    ) -> Result<()> {
+        let mut module_names = Vec::new();
+
+        // Add type module names
+        if !type_items.is_empty() {
+            let grouped_type_items = self.group_items_by_target_file(type_items);
+            let type_module_names =
+                self.extract_module_names_for_organized_items(&grouped_type_items);
+            module_names.extend(type_module_names);
+        }
+
+        // Add logic module names
+        if !logic_items.is_empty() {
+            // Check if we have functions (they go into functions.rs)
+            let has_functions = logic_items
+                .iter()
+                .any(|item| matches!(item, SourceItem::Function(_)));
+            if has_functions {
+                module_names.push(Self::FUNCTIONS_MODULE.to_string());
+            }
+
+            // Add module names for each macro (they get individual files)
+            for item in logic_items {
+                let SourceItem::MacroRules(macro_item) = item else {
+                    continue;
+                };
+
+                let Some(ident) = &macro_item.ident else {
+                    continue;
+                };
+
+                module_names.push(ident.to_string());
+            }
+        }
+
+        if !module_names.is_empty() {
+            module_names.sort();
+            self.write_mod_file_content(&output_dir.join(Self::MOD_RS), module_names)?;
+        }
+
+        Ok(())
+    }
+
+    /// Write grouped items to a directory
+    fn write_grouped_items_to_directory(
+        &self,
+        output_dir: &Path,
+        grouped_items: &IndexMap<String, Vec<SourceItem>>,
+    ) -> Result<()> {
+        // Ensure the output directory exists
+        std::fs::create_dir_all(output_dir).map_err(|e| {
+            Error::bail(format!(
+                "Failed to create output directory {}: {}",
+                output_dir.display(),
+                e
+            ))
+        })?;
+
+        debug!(
+            "Writing {} groups to directory: {}",
+            grouped_items.len(),
+            output_dir.display()
+        );
+        for (file_name, group_items) in grouped_items {
+            let target_file = output_dir.join(file_name);
+            debug!(
+                "Writing file: {} with {} items",
+                target_file.display(),
+                group_items.len()
+            );
+            let content = self.build_organized_file_content(group_items);
+            self.write_content_to_file(&content, &target_file)?;
         }
         Ok(())
     }
@@ -113,86 +269,15 @@ impl RustFileContent {
     }
 
     /// Determines the output directory based on the base path
-    /// If base_path is a file, use its parent directory; if it's a directory, use it directly
+    /// If base_path is a file (has .rs extension), use its parent directory; if it's a directory, use it directly
     pub(super) fn determine_output_directory(&self, base_path: &Path) -> PathBuf {
-        if base_path.is_file() {
+        if base_path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
+            // It's a .rs file, use the parent directory
             base_path.parent().unwrap_or(Path::new(".")).to_path_buf()
         } else {
+            // It's a directory (or no extension), use it directly
             base_path.to_path_buf()
         }
-    }
-
-    /// Groups items by target file and writes each group to its file
-    fn process_and_write_grouped_items(&self, base_path: &Path) -> Result<()> {
-        let items = self.content().items();
-        let grouped_items = self.group_items_by_target_file(items);
-
-        // Write each group to its corresponding file
-        for (file_name, group_items) in grouped_items {
-            let target_file = self.determine_target_file_path(base_path, &file_name);
-            self.write_items_to_file(&group_items, &target_file)?;
-        }
-        Ok(())
-    }
-
-    /// Determines the target file path for a given file name
-    fn determine_target_file_path(&self, base_path: &Path, file_name: &str) -> PathBuf {
-        if file_name == *self.content().name() {
-            // Use the original path for items that stay in the main file
-            self.handle_original_file_path(base_path)
-        } else {
-            // Create new file path for split items
-            self.create_split_file_path(base_path, file_name)
-        }
-    }
-
-    /// Handles the original file path logic
-    fn handle_original_file_path(&self, base_path: &Path) -> PathBuf {
-        if base_path.is_dir() {
-            // If output is a directory, place the original file in it
-            return base_path.join(self.content().name());
-        }
-
-        // If output is a file path, use it directly
-        base_path.to_path_buf()
-    }
-
-    /// Creates a path for split files
-    fn create_split_file_path(&self, base_path: &Path, file_name: &str) -> PathBuf {
-        if base_path.is_dir() {
-            // If output is a directory, place the new file in it
-            return base_path.join(file_name);
-        }
-
-        // If output is a file path, replace the file name component
-        base_path.with_file_name(file_name)
-    }
-
-    /// Helper method to write a collection of items to a file
-    fn write_items_to_file(&self, items: &[SourceItem], file_path: &Path) -> Result<()> {
-        let content = self.build_file_content(items);
-        self.write_content_to_file(&content, file_path)
-    }
-
-    /// Builds the complete file content from a collection of items
-    fn build_file_content(&self, items: &[SourceItem]) -> String {
-        let mut content = String::new();
-
-        let mut last_item: Option<&SourceItem> = None;
-        for item in items {
-            let item_code = self.source_item_to_string(item);
-            content.push_str(&item_code);
-            content.push('\n');
-            if let Some(last) = last_item {
-                // Add an extra newline if the last item was an impl block
-                if last.is_impl() && item.is_impl() {
-                    content.push('\n');
-                }
-            }
-            last_item = Some(item);
-        }
-
-        content
     }
 
     /// Updates or creates mod.rs file with module declarations for split files

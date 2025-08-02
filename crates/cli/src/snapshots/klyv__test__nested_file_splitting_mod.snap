@@ -1,0 +1,11 @@
+---
+source: crates/cli/src/test.rs
+expression: mod_content
+---
+mod deep_foo;
+mod deep_foobar;
+mod functions;
+
+pub use deep_foo::*;
+pub use deep_foobar::*;
+pub use functions::*;

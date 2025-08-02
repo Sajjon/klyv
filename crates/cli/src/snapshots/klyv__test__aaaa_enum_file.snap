@@ -2,6 +2,8 @@
 source: crates/cli/src/test.rs
 expression: content
 ---
+use crate::prelude::*;
+
 use std::str::FromStr;
 
 /// Doc about AaaaEnum
